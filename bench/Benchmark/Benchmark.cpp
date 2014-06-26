@@ -389,9 +389,6 @@ void executeFunctionType(
     {
     case f_merge:
         { 
-           /* for(int i =0;i<input1.size();i++)
-                std::cout<<input1[i]<<" ";
-            std::cout<<"\n";*/
             std::cout <<  functionNames[f_merge] << std::endl;
 #if (BOLT_BENCHMARK == 1)
             bolt::BENCH_BEND::sort( ctrl, input1.begin( ), input1.end( ), binaryPredLt);
@@ -1255,7 +1252,7 @@ void PrintHelp()
     cout<<"OpenCL command line options: \n";
     cout<<"-h [ --help ]"<<"\n\t\t\t\tproduces this help message\n";
 #if (BOLT_BENCHMARK == 1)
-cout<<"-v [ --version ]"<<"\n\t\t\t\tPrint queryable version information from the Bolt CL library\n";
+	cout<<"-v [ --version ]"<<"\n\t\t\t\tPrint queryable version information from the Bolt CL library\n";
     cout<<"-q [ --queryOpenCL ]"<<"\n\t\t\t\tPrint queryable platform and device info and return\n";
     cout<<"-g [ --gpu ]"<<"\n\t\t\t\tReport only OpenCL GPU devices\n";
     cout<<"-c [ --cpu ]"<<"\n\t\t\t\tReport only OpenCL CPU devices\n";
