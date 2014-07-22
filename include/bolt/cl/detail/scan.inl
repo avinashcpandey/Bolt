@@ -358,7 +358,7 @@ namespace detail
 					"local "  + typeNames[scan_iIterType] + "::value_type * lds,\n"
 					"global " + typeNames[scan_BinaryFunction] + "* binaryOp,\n"
 					"global " + typeNames[scan_iIterType] + "::value_type * preSumArray,\n"
-					"global " + typeNames[scan_iIterType] + "::value_type * preSumArray1,\n"
+					"const uint load_per_wg,\n"
 					"int exclusive\n"
 					");\n\n"
 
@@ -383,9 +383,9 @@ namespace detail
 					"global " + typeNames[scan_iValueType] + "* input,\n"
 					""        + typeNames[scan_iIterType] + " input_iter,\n"
 					"global " + typeNames[scan_iIterType] + "::value_type * preSumArray,\n"
-					"global " + typeNames[scan_iIterType] + "::value_type * preSumArray1,\n"
 					"local  " + typeNames[scan_iIterType] + "::value_type * lds,\n"
 					"const uint vecSize,\n"
+					"const uint load_per_wg,\n"
 					"global " + typeNames[scan_BinaryFunction] + "* binaryOp,\n"
 					"int exclusive,\n"
 					 ""        + typeNames[scan_initType] + " identity\n"
@@ -464,6 +464,10 @@ namespace detail
 				oss << " -DKERNEL0WORKGROUPSIZE=" << kernel0_WgSize;
 				oss << " -DKERNEL1WORKGROUPSIZE=" << kernel1_WgSize;
 				oss << " -DKERNEL2WORKGROUPSIZE=" << kernel2_WgSize;
+				if(!inclusive)
+					oss << " -DEXCLUSIVE=" << 1;
+				else
+					oss << " -DEXCLUSIVE=" << 0;
 
 				oss << " -DUSE_AMD_HSA=" << USE_AMD_HSA;
 				compileOptions = oss.str();
@@ -494,14 +498,14 @@ namespace detail
 				cl_uint numElements = static_cast< cl_uint >( std::distance( first, last ) );
 
 				size_t numElementsRUP = numElements;
-				size_t modWgSize = (numElementsRUP & ((kernel0_WgSize*2)-1));
+				size_t modWgSize = (numElementsRUP & ((kernel0_WgSize)-1));
 							if( modWgSize )
 							{
 					numElementsRUP &= ~modWgSize;
-					numElementsRUP += (kernel0_WgSize*2);
+					numElementsRUP += (kernel0_WgSize);
 				}
 
-				cl_uint numWorkGroupsK0 = static_cast< cl_uint >( numElementsRUP / (kernel0_WgSize*2) );//2 element per work item
+				cl_uint numWorkGroupsK0 = static_cast< cl_uint >( numElementsRUP / (kernel0_WgSize) );
 
 
 				// Create buffer wrappers so we can access the host functors, for read or writing in the kernel
@@ -686,23 +690,41 @@ namespace detail
 
 							//  Ceiling function to bump the size of the sum array to the next whole wavefront size
 				typename device_vector< iType >::size_type sizeScanBuff = numWorkGroupsK0;
-				modWgSize = (sizeScanBuff & ((kernel0_WgSize*2)-1));
+				modWgSize = (sizeScanBuff & ((kernel0_WgSize)-1));
 							if( modWgSize )
 							{
 								sizeScanBuff &= ~modWgSize;
-								sizeScanBuff += (kernel0_WgSize*2);
+								sizeScanBuff += (kernel0_WgSize);
 							}
 
-				control::buffPointer preSumArray = ctrl.acquireBuffer( (sizeScanBuff)*sizeof( iType ) );
-				control::buffPointer preSumArray1 = ctrl.acquireBuffer( (sizeScanBuff)*sizeof( iType ) );
-				//::cl::Buffer userFunctor( ctrl.context( ), CL_MEM_USE_HOST_PTR, sizeof( binary_op ), &binary_op );
-				//::cl::Buffer preSumArray( ctrl.context( ), CL_MEM_READ_WRITE, sizeScanBuff*sizeof(iType) );
-				//::cl::Buffer postSumArray( ctrl.context( ), CL_MEM_READ_WRITE, sizeScanBuff*sizeof(iType) );
+			cl_uint computeUnits = ctrl.getDevice().getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
+			unsigned int wgComputeUnit = (computeUnits*64);
 
+			unsigned int load_per_wg = numElements % wgComputeUnit?((numElements/wgComputeUnit)+1):(numElements/wgComputeUnit);
 
-							/**********************************************************************************
-							 *  Kernel 0
-							 *********************************************************************************/
+			load_per_wg = load_per_wg;
+			modWgSize = (load_per_wg & ((kernel0_WgSize)-1));
+			if( modWgSize )
+			{
+				load_per_wg &= ~modWgSize;
+				load_per_wg += (kernel0_WgSize);
+			}
+
+			unsigned int no_workgrs = numElements % load_per_wg?((numElements/load_per_wg)+1):(numElements/load_per_wg);
+
+			no_workgrs = no_workgrs;
+			modWgSize = (no_workgrs & ((kernel0_WgSize)-1));
+			if( modWgSize )
+			{
+				no_workgrs &= ~modWgSize;
+				no_workgrs += (kernel0_WgSize);
+			}
+
+			control::buffPointer preSumArray = ctrl.acquireBuffer( (no_workgrs)*sizeof( iType ) );
+
+			/**********************************************************************************
+			 *  Kernel 0
+			 *********************************************************************************/
 			#ifdef BOLT_PROFILER_ENABLED
 			size_t k0e_stepNum, k0s_stepNum, k0_stepNum, k1s_stepNum, k1_stepNum, k2s_stepNum, k2_stepNum, ret_stepNum;
 			aProfiler.nextStep();
@@ -711,16 +733,15 @@ namespace detail
 			#endif
 				 typename InputIterator::Payload first_payload = first.gpuPayload( );
 
-				ldsSize  = static_cast< cl_uint >( ( kernel0_WgSize *2 ) * sizeof( iType ) );
+				ldsSize  = static_cast< cl_uint >( ( kernel0_WgSize  ) * sizeof( iType ) );
 				V_OPENCL( kernels[ 0 ].setArg( 0, first.base().getContainer().getBuffer() ),    "Error setting argument for kernels[ 0 ]" ); // Input buffer
 				V_OPENCL( kernels[ 0 ].setArg( 1, first.gpuPayloadSize( ),&first_payload ), "Error setting a kernel argument" );
-
 				V_OPENCL( kernels[ 0 ].setArg( 2, init_T ),                 "Error setting argument for kernels[ 0 ]" ); // Initial value used for exclusive scan
 				V_OPENCL( kernels[ 0 ].setArg( 3, numElements ),            "Error setting argument for kernels[ 0 ]" ); // Size of scratch buffer
 				V_OPENCL( kernels[ 0 ].setArg( 4, ldsSize, NULL ),          "Error setting argument for kernels[ 0 ]" ); // Scratch buffer
 				V_OPENCL( kernels[ 0 ].setArg( 5, *userFunctor ),           "Error setting argument for kernels[ 0 ]" ); // User provided functor class
 				V_OPENCL( kernels[ 0 ].setArg( 6, *preSumArray ),           "Error setting argument for kernels[ 0 ]" ); // Output per block sum buffer
-				V_OPENCL( kernels[ 0 ].setArg( 7, *preSumArray1 ),           "Error setting argument for kernels[ 0 ]" ); // Output per block
+				V_OPENCL( kernels[ 0 ].setArg( 7, load_per_wg ),            "Error setting argument for kernels[ 0 ]" ); // load per work group
 				V_OPENCL( kernels[ 0 ].setArg( 8, doExclusiveScan ),        "Error setting argument for scanKernels[ 0 ]" ); // Exclusive scan?
 
 			#ifdef BOLT_PROFILER_ENABLED
@@ -743,22 +764,24 @@ namespace detail
 				l_Error = ctrl.getCommandQueue( ).enqueueNDRangeKernel(
 					kernels[ 0 ],
 								::cl::NullRange,
-					::cl::NDRange( numElementsRUP/2 ),
+								::cl::NDRange( no_workgrs * kernel0_WgSize  ),
 								::cl::NDRange( kernel0_WgSize ),
 								NULL,
 								&kernel0Event);
-							V_OPENCL( l_Error, "enqueueNDRangeKernel() failed for perBlockInclusiveScan kernel" );
+
+					V_OPENCL( l_Error, "enqueueNDRangeKernel() failed for perBlockInclusiveScan kernel" );
+
 
 							/**********************************************************************************
 							 *  Kernel 1
 							 *********************************************************************************/
 					ldsSize  = static_cast< cl_uint >( ( kernel0_WgSize ) * sizeof( iType ) );
-							cl_uint workPerThread = static_cast< cl_uint >( (sizeScanBuff) / kernel1_WgSize  );
+							cl_uint workPerThread = static_cast< cl_uint >( (no_workgrs) / kernel1_WgSize  );
 					workPerThread = workPerThread ? workPerThread : 1;
 
 				V_OPENCL( kernels[ 1 ].setArg( 0, *preSumArray ),   "Error setting 1st argument for kernels[ 1 ]" );            // Input buffer
 				V_OPENCL( kernels[ 1 ].setArg( 1, init_T ),         "Error setting     argument for kernels[ 1 ]" );   // Initial value used for exclusive scan
-				V_OPENCL( kernels[ 1 ].setArg( 2, numWorkGroupsK0 ),"Error setting 2nd argument for kernels[ 1 ]" );            // Size of scratch buffer
+				V_OPENCL( kernels[ 1 ].setArg( 2, no_workgrs ),		"Error setting 2nd argument for kernels[ 1 ]" );            // Size of scratch buffer
 				V_OPENCL( kernels[ 1 ].setArg( 3, ldsSize, NULL ),  "Error setting 3rd argument for kernels[ 1 ]" );  // Scratch buffer
 				V_OPENCL( kernels[ 1 ].setArg( 4, workPerThread ),  "Error setting 4th argument for kernels[ 1 ]" );           // User provided functor class
 				V_OPENCL( kernels[ 1 ].setArg( 5, *userFunctor ),   "Error setting 5th argument for kernels[ 1 ]" );           // User provided functor class
@@ -788,7 +811,7 @@ namespace detail
 				/**********************************************************************************
 				 *  Kernel 2
 				 *********************************************************************************/
-				
+				ldsSize  = static_cast< cl_uint >( ( kernel0_WgSize ) * sizeof( iType ) );
 				typename OutputIterator::Payload result_payload = result.gpuPayload( );
 				typename InputIterator::Payload first2_payload = first.gpuPayload( );
 
@@ -797,9 +820,9 @@ namespace detail
 				V_OPENCL( kernels[ 2 ].setArg( 2, first.base().getContainer().getBuffer() ),    "Error setting argument for kernels[ 0 ]" ); // Input buffer
 				V_OPENCL( kernels[ 2 ].setArg( 3, first.gpuPayloadSize( ),&first2_payload ), "Error setting a kernel argument" );
 				V_OPENCL( kernels[ 2 ].setArg( 4, *preSumArray ), "Error setting 1st argument for scanKernels[ 2 ]" );            // Input buffer
-				V_OPENCL( kernels[ 2 ].setArg( 5, *preSumArray1 ),           "Error setting argument for kernels[ 0 ]" ); // Output per block
-				V_OPENCL( kernels[ 2 ].setArg( 6, ldsSize, NULL ),          "Error setting argument for kernels[ 0 ]" ); // Scratch buffer
-				V_OPENCL( kernels[ 2 ].setArg( 7, numElements ), "Error setting 2nd argument for scanKernels[ 2 ]" );   // Size of scratch buffer
+				V_OPENCL( kernels[ 2 ].setArg( 5, ldsSize, NULL ),          "Error setting argument for kernels[ 0 ]" ); // Scratch buffer
+				V_OPENCL( kernels[ 2 ].setArg( 6, numElements ), "Error setting 2nd argument for scanKernels[ 2 ]" );   // Size of scratch buffer
+				V_OPENCL( kernels[ 2 ].setArg( 7, load_per_wg ),        "Error setting argument for scanKernels[ 0 ]" ); // Exclusive scan?
 				V_OPENCL( kernels[ 2 ].setArg( 8, *userFunctor ), "Error setting 3rd argument for scanKernels[ 2 ]" );           // User provided functor class
 				V_OPENCL( kernels[ 2 ].setArg( 9, doExclusiveScan ),        "Error setting argument for scanKernels[ 0 ]" ); // Exclusive scan?
 				V_OPENCL( kernels[ 2 ].setArg( 10, init_T ),                 "Error setting argument for kernels[ 0 ]" ); // Initial value used for exclusive scan
@@ -821,7 +844,7 @@ namespace detail
 								l_Error = ctrl.getCommandQueue( ).enqueueNDRangeKernel(
 								kernels[ 2 ],
 								::cl::NullRange,
-								::cl::NDRange( numElementsRUP ), // remove /2 to return to 1 element per thread
+								::cl::NDRange( no_workgrs * kernel0_WgSize ), // remove /2 to return to 1 element per thread
 								::cl::NDRange( kernel2_WgSize ),
 								NULL,
 								&kernel2Event );
