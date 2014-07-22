@@ -1,19 +1,19 @@
-/***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
-*                                                                                    
-*   Licensed under the Apache License, Version 2.0 (the "License");   
-*   you may not use this file except in compliance with the License.                 
-*   You may obtain a copy of the License at                                          
-*                                                                                    
-*       http://www.apache.org/licenses/LICENSE-2.0                      
-*                                                                                    
-*   Unless required by applicable law or agreed to in writing, software              
-*   distributed under the License is distributed on an "AS IS" BASIS,              
-*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.         
-*   See the License for the specific language governing permissions and              
-*   limitations under the License.                                                   
+/***************************************************************************
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
+*
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+*
+*       http://www.apache.org/licenses/LICENSE-2.0
+*
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
 
-***************************************************************************/                                                                                     
+***************************************************************************/
 
 
 /*! \file bolt/cl/bolt.h
@@ -21,8 +21,8 @@
 */
 
 #pragma once
-#if !defined( OCL_BOLT_H )
-#define OCL_BOLT_H
+#if !defined( BOLT_CL_BOLT_H )
+#define BOLT_CL_BOLT_H
 #define __CL_ENABLE_EXCEPTIONS
 #define CL_USE_DEPRECATED_OPENCL_1_1_APIS
 
@@ -50,7 +50,7 @@
  *  \todo Follow the coding guideline for expanding tabs to spaces, max line char width of 120 chars
  *  \todo Add support for vs2008
  *  \todo Add support for linux/mingw
- *  \todo Review the the use of parameters to the Bolt API; should parameters for chained functions past 
+ *  \todo Review the the use of parameters to the Bolt API; should parameters for chained functions past
  *  the public API be references?  Iterators and everything.
  *  \todo Add CPU implementations, i.e. link an external library or define our own CPU implementation
  *  \todo Statically link the Boost libraries into the Bolt library
@@ -68,19 +68,28 @@
 namespace bolt {
     namespace cl {
 
+        extern const std::string binary_search_kernels;
         extern const std::string copy_kernels;
+        extern const std::string count_kernels;
         extern const std::string fill_kernels;
+        extern const std::string gather_kernels;
         extern const std::string generate_kernels;
+        extern const std::string merge_kernels;
         extern const std::string min_element_kernels;
         extern const std::string reduce_kernels;
         extern const std::string reduce_by_key_kernels;
         extern const std::string scan_kernels;
         extern const std::string scan_by_key_kernels;
+        extern const std::string scatter_kernels;
         extern const std::string sort_kernels;
         extern const std::string stablesort_kernels;
         extern const std::string stablesort_by_key_kernels;
         extern const std::string sort_uint_kernels;
+        extern const std::string sort_int_kernels;
+        extern const std::string sort_common_kernels;
         extern const std::string sort_by_key_kernels;
+        extern const std::string sort_by_key_int_kernels;
+        extern const std::string sort_by_key_uint_kernels;
         extern const std::string transform_kernels;
         extern const std::string transform_reduce_kernels;
         extern const std::string transform_scan_kernels;
@@ -88,7 +97,7 @@ namespace bolt {
         // transform_scan kernel names
         //static std::string transform_scan_kernel_names_array[] = { "perBlockTransformScan", "intraBlockInclusiveScan", "perBlockAddition" };
         //const std::vector<std::string> transformScanKernelNames(transform_scan_kernel_names_array, transform_scan_kernel_names_array+3);
-        
+
         /******************************************************************
          * Kernel Template Specialization
          *****************************************************************/
@@ -96,7 +105,7 @@ namespace bolt {
         {
             public:
                 // kernel template specializer functor
-                virtual const ::std::string operator() (const ::std::vector<::std::string>& typeNames) const
+                virtual const ::std::string operator() (const ::std::vector< ::std::string >& typeNames) const
                 { return "Error; virtual function not overloaded"; }
 
                 // add a kernel name
@@ -109,10 +118,10 @@ namespace bolt {
                 size_t numKernels() const { return kernelNames.size(); }
 
                 // kernel vector
-                const ::std::vector<::std::string> getKernelNames() const { return kernelNames; }
+                const ::std::vector< ::std::string > getKernelNames() const { return kernelNames; }
 
             public:
-                ::std::vector<std::string> kernelNames;
+                ::std::vector< ::std::string > kernelNames;
         };
 
         class control;
@@ -127,15 +136,15 @@ namespace bolt {
          * previously compiled.
          * see bolt/cl/detail/scan.inl for example usage
          **********************************************************************/
-        ::std::vector<::cl::Kernel> getKernels(
+        ::std::vector< ::cl::Kernel > getKernels(
             const control&      ctl,
-            const ::std::vector<::std::string>& typeNames,
+            const ::std::vector< ::std::string >& typeNames,
             const KernelTemplateSpecializer * const kts,
-            const ::std::vector<::std::string>& typeDefinitions,
+            const ::std::vector< ::std::string >& typeDefinitions,
             const std::string&  baseKernelString,
             const std::string&  compileOptions = ""
                  );
-        
+
         /*! \brief Query the Bolt library for version information
             *  \details Return the major, minor and patch version numbers associated with the Bolt library
             *  \param[out] major Major functionality change
@@ -163,7 +172,7 @@ namespace bolt {
         *  \note std::exception is built to only use narrow text
         */
         inline cl_int V_OpenCL( cl_int res, const std::string& msg, size_t lineno )
-        { 
+        {
             switch( res )
             {
                 case    CL_SUCCESS:
@@ -268,19 +277,28 @@ namespace bolt {
         extern boost::mutex programMapMutex;
         extern ProgramMap programMap;
 
-	};
+    };
 };
 
 #if defined( _WIN32 )
 #define ALIGNED( bound ) __declspec( align( bound ) )
 #else
-#define ALIGNED( bound ) __attribute__ ( (aligned( bound ) ) ) 
+#define ALIGNED( bound ) __attribute__ ( (aligned( bound ) ) )
 #endif
 
-BOLT_CREATE_TYPENAME( int );
-BOLT_CREATE_TYPENAME( unsigned int );
-BOLT_CREATE_TYPENAME( float );
-BOLT_CREATE_TYPENAME( double );
+//Visual Studio 2012 is not able to map char to cl_char. Hence this typename is added.
+BOLT_CREATE_TYPENAME( char );
+
+BOLT_CREATE_TYPENAME( cl_char );   
+BOLT_CREATE_TYPENAME( cl_uchar );  
+BOLT_CREATE_TYPENAME( cl_short ); 
+BOLT_CREATE_TYPENAME( cl_ushort );
+BOLT_CREATE_TYPENAME( cl_int );   
+BOLT_CREATE_TYPENAME( cl_uint );  
+BOLT_CREATE_TYPENAME( cl_long );  
+BOLT_CREATE_TYPENAME( cl_ulong ); 
+BOLT_CREATE_TYPENAME( cl_float ); 
+BOLT_CREATE_TYPENAME( cl_double );
 
 ////  Pre-define standard primitives that are likely to be used in a variety of OpenCL kernels
 //BOLT_CREATE_TYPENAME( cl_int );

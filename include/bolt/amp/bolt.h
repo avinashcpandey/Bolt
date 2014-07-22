@@ -1,19 +1,19 @@
-/***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
-*                                                                                    
-*   Licensed under the Apache License, Version 2.0 (the "License");   
-*   you may not use this file except in compliance with the License.                 
-*   You may obtain a copy of the License at                                          
-*                                                                                    
-*       http://www.apache.org/licenses/LICENSE-2.0                      
-*                                                                                    
-*   Unless required by applicable law or agreed to in writing, software              
-*   distributed under the License is distributed on an "AS IS" BASIS,              
-*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.         
-*   See the License for the specific language governing permissions and              
-*   limitations under the License.                                                   
+/***************************************************************************
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
+*
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+*
+*       http://www.apache.org/licenses/LICENSE-2.0
+*
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
 
-***************************************************************************/                                                                                     
+***************************************************************************/
 
 /*! \file bolt/amp/bolt.h
     \brief Define global functions for Bolt AMP.
@@ -21,8 +21,8 @@
 
 
 #pragma once
-#if !defined( AMP_BOLT_H )
-#define AMP_BOLT_H
+#if !defined( BOLT_AMP_BOLT_H )
+#define BOLT_AMP_BOLT_H
 
 #if defined(__APPLE__) || defined(__MACOSX)
 #else
@@ -45,7 +45,7 @@
  *  \todo Follow the coding guideline for expanding tabs to spaces, max line char width of 120 chars
  *  \todo Add support for vs2008
  *  \todo Add support for linux/mingw
- *  \todo Review the the use of parameters to the Bolt API; should parameters for chained functions past 
+ *  \todo Review the the use of parameters to the Bolt API; should parameters for chained functions past
  *  the public API be references?  Iterators and everything.
  *  \todo Add buffer pool for temporary memory allocated by Bolt calls
  *  \todo Review documentation for typos, clarity, etc
@@ -63,32 +63,6 @@
 
 namespace bolt {
     namespace amp {
-                
-        /******************************************************************
-         * Kernel Template Specialization
-         *****************************************************************/
-        class KernelTemplateSpecializer
-        {
-            public:
-                // kernel template specializer functor
-                virtual const ::std::string operator() (const ::std::vector<::std::string>& typeNames) const
-                { return "Error; virtual function not overloaded"; }
-
-                // add a kernel name
-                void addKernelName( const std::string& kernelName) { kernelNames.push_back(kernelName); }
-
-                // get the name of a particular kernel
-                const ::std::string name( int kernelIndex ) const { return kernelNames[ kernelIndex ]; }
-
-                // return number of kernels
-                size_t numKernels() const { return kernelNames.size(); }
-
-                // kernel vector
-                const ::std::vector<::std::string> getKernelNames() const { return kernelNames; }
-
-            public:
-                ::std::vector<std::string> kernelNames;
-        };
 
         class control;
 
@@ -121,7 +95,7 @@ namespace bolt {
         */
         /*
         inline cl_int V_OpenCL( cl_int res, const std::string& msg, size_t lineno )
-        { 
+        {
             switch( res )
             {
                 case    CL_SUCCESS:
@@ -152,7 +126,7 @@ namespace bolt {
 #if defined( _WIN32 )
 #define ALIGNED( bound ) __declspec( align( bound ) )
 #else
-#define ALIGNED( bound ) __attribute__ ( (aligned( bound ) ) ) 
+#define ALIGNED( bound ) __attribute__ ( (aligned( bound ) ) )
 #endif
 
 #endif

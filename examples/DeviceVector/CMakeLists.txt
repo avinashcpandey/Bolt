@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -16,10 +16,8 @@
 ############################################################################                                                                                     
 
 # List the names of common files to compile across all platforms
-set( clBolt.Example.Device.Vector.Source stdafx.cpp deviceVector.cpp )
-set( clBolt.Example.Device.Vector.Headers 	stdafx.h 
-								targetver.h 
-								${BOLT_INCLUDE_DIRS}/bolt/cl/device_Vector.h )
+set( clBolt.Example.Device.Vector.Source  deviceVector.cpp )
+set( clBolt.Example.Device.Vector.Headers ${BOLT_INCLUDE_DIRS}/bolt/cl/device_vector.h )
 
 set( clBolt.Example.Device.Vector.Files ${clBolt.Example.Device.Vector.Source} ${clBolt.Example.Device.Vector.Headers} )
 

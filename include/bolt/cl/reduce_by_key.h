@@ -1,28 +1,26 @@
-/***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
-*                                                                                    
-*   Licensed under the Apache License, Version 2.0 (the "License");   
-*   you may not use this file except in compliance with the License.                 
-*   You may obtain a copy of the License at                                          
-*                                                                                    
-*       http://www.apache.org/licenses/LICENSE-2.0                      
-*                                                                                    
-*   Unless required by applicable law or agreed to in writing, software              
-*   distributed under the License is distributed on an "AS IS" BASIS,              
-*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.         
-*   See the License for the specific language governing permissions and              
-*   limitations under the License.                                                   
+/***************************************************************************
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
+*
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+*
+*       http://www.apache.org/licenses/LICENSE-2.0
+*
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
 
-***************************************************************************/                                                                                     
+***************************************************************************/
 
-#if !defined( REDUCE_BY_KEY_H )
-#define REDUCE_BY_KEY_H
+#if !defined( BOLT_CL_REDUCE_BY_KEY_H )
+#define BOLT_CL_REDUCE_BY_KEY_H
 #pragma once
 
-#include <bolt/cl/bolt.h>
-#include <bolt/cl/functional.h>
-#include <bolt/cl/device_vector.h>
-#include <bolt/cl/pair.h>
+#include "bolt/cl/device_vector.h"
+#include "bolt/cl/pair.h"
 
 /*! \file bolt/cl/reduce_by_key.h
     \brief Performs on a sequence, a reduction of each sub-sequence as defined by equivalent keys.
@@ -38,7 +36,7 @@ namespace bolt
             /*! \addtogroup reductions
             *   \ingroup algorithms
             *   reduce_by_key performs, on a sequence, a reduction of each sub-sequence as defined by equivalent keys.
-            */ 
+            */
 
             /*! \addtogroup CL-reduce_by_key
             *   \ingroup reductions
@@ -115,8 +113,10 @@ namespace bolt
             /*! \brief \p reduce_by_key performs, on a sequence,
             * a reduction of each sub-sequence as defined by equivalent keys;
             * the BinaryFunction in this version is plus().
+			* reduce_by_key is a generalization of reduce to key-value pairs.
+			* If the reduction operator is not commutative then bolt::reduce_by_key should not be used. 
             *
-            * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.  
+            * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.
             *                       See bolt::cl::control.
             * \param keys_first    The first element of the key sequence.
             * \param keys_last     The last  element of the key sequence.
@@ -188,8 +188,10 @@ namespace bolt
 
            /*! \brief \p reduce_by_key performs, on a sequence,
             * a reduction of each sub-sequence as defined by equivalent keys;
+			* reduce_by_key is a generalization of reduce to key-value pairs.
+			* If the reduction operator is not commutative then bolt::reduce_by_key should not be used. 
             *
-            * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.  
+            * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.
             *                      See bolt::cl::control.
             * \param keys_first    The first element of the key sequence.
             * \param keys_last     The last  element of the key sequence.
@@ -266,7 +268,7 @@ namespace bolt
 
 
 
-        };// end of bolt::cl  
+        };// end of bolt::cl
 };// end of bolt namespace
 
 #include <bolt/cl/detail/reduce_by_key.inl>

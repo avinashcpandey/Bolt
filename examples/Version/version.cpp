@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -15,10 +15,11 @@
 
 ***************************************************************************/                                                                                     
 
-#include "stdafx.h"
-
-#include <bolt/boltVersion.h>
+#include <bolt/unicode.h>
+#include <bolt/BoltVersion.h>
 #include <bolt/cl/bolt.h>
+#include <iostream>
+#include <iomanip>
 
 int _tmain( int argc, _TCHAR* argv[ ] )
 {

@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -15,8 +15,7 @@
 
 ***************************************************************************/                                                                                     
 
-#include "stdafx.h"
-
+#include <bolt/unicode.h>
 #include <bolt/cl/scan.h>
 
 #include <vector>
@@ -24,7 +23,7 @@
 
 int _tmain( int argc, _TCHAR* argv[ ] )
 {
-    size_t length = 1024;
+    int length = 1024;
     //Create device_vector and initialize it to 1
     std::cout << "\nScan EXAMPLE \n";
     bolt::cl::device_vector< int > boltInput( length, 1 );

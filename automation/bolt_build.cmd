@@ -10,8 +10,8 @@ set CMAKE="C:\Program Files (x86)\CMake 2.8\bin\cmake.exe"
 
 REM ################################################################################################
 REM # File Paths
-set BOLT_BUILD_SOURCE_PATH=C:\Jenkins_FS_Root\workspace\bolt_GitHub_repository_clone
 set BOLT_BUILD_INSTALL_PATH=%CD%
+set BOLT_BUILD_SOURCE_PATH=%~dp0..
 
 REM ################################################################################################
 REM # Build Version
@@ -159,17 +159,25 @@ if "%BOLT_BUILD_COMP_VER%" == "10" (
   ) else (
     goto :error_no_VSCOMNTOOLS
   )
-) else (
-  if "%BOLT_BUILD_COMP_VER%" == "11" ( 
+) else if "%BOLT_BUILD_COMP_VER%" == "11" ( 
     if not "%VS110COMNTOOLS%" == "" ( 
       set VCVARSALL="%VS110COMNTOOLS%..\..\VC\vcvarsall.bat"
     ) else (
       goto :error_no_VSCOMNTOOLS
     )
-  ) else (
-    echo Unrecognized BOLT_BUILD_COMP_VER=%BOLT_BUILD_COMP_VER%
-  )
-)
+) else if "%BOLT_BUILD_COMP_VER%" == "12" ( 
+		if not "%VS120COMNTOOLS%" == "" ( 
+			set VCVARSALL="%VS120COMNTOOLS%..\..\VC\vcvarsall.bat"
+		) else (
+			goto :error_no_VSCOMNTOOLS
+		)
+	) else (
+		echo Unrecognized BOLT_BUILD_COMP_VER=%BOLT_BUILD_COMP_VER%
+  	)
+
+
+
+
 if "%BOLT_BUILD_BIT%" == "64" ( 
   echo Info: vcvarsall.bat: %VCVARSALL% x86_amd64
   call %VCVARSALL% x86_amd64
@@ -183,12 +191,15 @@ echo Info: Done setting up compiler environment variables.
 REM Echo a blank line into a file called success; the existence of success determines whether we built successfully
 echo. > %BOLT_BUILD_INSTALL_PATH%\success
 
-REM Specify the location of a local image of boost, to help speed up the build process
-set BOOST_URL=http://see-srv/share/code/externals/boost/boost_1_52_0.zip
-set DOXYGEN_URL=http://see-srv/share/code/externals/doxygen/doxygen-1.8.3.windows.bin.zip
-set GTEST_URL=http://see-srv/share/code/externals/gtest/gtest-1.6.0.zip
-set TBB_ROOT=c:/Jenkins_FS_Root/dependencies/tbb41_20130116oss
+REM Specify the location of a local image of boost, Google test and doxygen. 
+REM Currently BOLT uses Boost 1.52.0, Doxygen 1.8.3.windows, Google Test 1.6.0 versions
+REM and TBB version 4.1 update 2. 
+REM set BOOST_URL=<Enter path to Boost folder>/boost_1_52_0.zip
+REM set DOXYGEN_URL=<Enter path to Doxygen zip file>/doxygen-1.8.3.windows.bin.zip
+REM set GTEST_URL=<Enter path to GTEST folder>/gtest-1.6.0.zip
+REM set TBB_ROOT=<Enter path to TBB folder>
 
+REM Otherwise The above 4 variables can also be defined in the environment variable. 
 
 REM ################################################################################################
 REM # Start of build logic here
@@ -205,6 +216,8 @@ echo Info: Running CMake to generate build files.
   -D BUILD_StripSymbols=ON ^
   -D BUILD_TBB=ON ^
   -D Bolt.SuperBuild_VERSION_PATCH=%BOLT_BUILD_VERSION_PATCH% ^
+  -D Bolt.SuperBuild_VERSION_MAJOR=%BOLT_BUILD_VERSION_MAJOR% ^
+  -D Bolt.SuperBuild_VERSION_MINOR=%BOLT_BUILD_VERSION_MINOR% ^
   %BOLT_BUILD_SOURCE_PATH%\superbuild
 if errorlevel 1 (
   echo Info: CMake failed.

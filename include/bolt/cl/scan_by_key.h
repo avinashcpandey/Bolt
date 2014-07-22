@@ -1,27 +1,26 @@
-/***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
-*                                                                                    
-*   Licensed under the Apache License, Version 2.0 (the "License");   
-*   you may not use this file except in compliance with the License.                 
-*   You may obtain a copy of the License at                                          
-*                                                                                    
-*       http://www.apache.org/licenses/LICENSE-2.0                      
-*                                                                                    
-*   Unless required by applicable law or agreed to in writing, software              
-*   distributed under the License is distributed on an "AS IS" BASIS,              
-*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.         
-*   See the License for the specific language governing permissions and              
-*   limitations under the License.                                                   
+/***************************************************************************
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
+*
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+*
+*       http://www.apache.org/licenses/LICENSE-2.0
+*
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
 
-***************************************************************************/                                                                                     
+***************************************************************************/
 
-#if !defined( SCAN_BY_KEY_H )
-#define SCAN_BY_KEY_H
+#if !defined( BOLT_CL_SCAN_BY_KEY_H )
+#define BOLT_CL_SCAN_BY_KEY_H
 #pragma once
 
-#include <bolt/cl/bolt.h>
-#include <bolt/cl/functional.h>
-#include <bolt/cl/device_vector.h>
+#include "bolt/cl/device_vector.h"
+
 
 /*! \file bolt/cl/scan_by_key.h
     \brief Performs, on a sequence, scan of each sub-sequence as defined by equivalent keys inclusive or exclusive.
@@ -36,9 +35,9 @@ namespace cl
 
 /*! \addtogroup PrefixSums Prefix Sums
  *   \ingroup algorithms
- */ 
+ */
 
-/*! \addtogroup SegmentedPrefixSums CL-Segmented Prefix Sums
+/*! \addtogroup CLSegmentedPrefixSums CL-Segmented Prefix Sums
  *   \ingroup PrefixSums
  *   \{
  */
@@ -47,6 +46,7 @@ namespace cl
 /*! \brief \p inclusive_scan_by_key performs, on a sequence,
  * an inclusive scan of each sub-sequence as defined by equivalent keys;
  * the BinaryFunction in this version is plus(), and the BinaryPredicate is equal_to().
+ * inclusive_scan_by_key uses the associative operator binary_op to perform the parallel segmented prefix sum.
  *
  * \param ctl          \b Optional Control structure to control command-queue, debug, tuning, etc.See bolt::cl::control.
  * \param first1       The first element of the key sequence.
@@ -70,7 +70,7 @@ namespace cl
  * int vals[11] = { 1, 1, 1, 1, 1, 1,  1,  1,  1,  1, 1 };
  * int out[11];
  *
- * bolt::cl::control ctrl = control::getDefault();
+ * bolt::cl::control ctrl = bolt::cl::control::getDefault();
  *
  * bolt::cl::inclusive_scan_by_key( ctrl, keys, keys+11, vals, out );
  * // out => { 1, 1, 2, 1, 2, 3, 1, 2, 3, 4, 1 }
@@ -112,6 +112,7 @@ inclusive_scan_by_key(
 /*! \brief \p inclusive_scan_by_key performs, on a sequence,
  * an inclusive scan of each sub-sequence as defined by equivalent keys;
  * the BinaryFunction in this version is plus().
+ * inclusive_scan_by_key uses the associative operator binary_op to perform the parallel segmented prefix sum.
  *
  * \param ctl        \b Optional Control structure to control command-queue, debug, tuning, etc. See bolt::cl::control.
  * \param first1      The first element of the key sequence.
@@ -137,7 +138,7 @@ inclusive_scan_by_key(
  * int out[11];
  *
  * bolt::cl::equal_to<int> eq;
- * bolt::cl::control ctrl = control::getDefault();
+ * bolt::cl::control ctrl = bolt::cl::control::getDefault();
  *
  * bolt::cl::inclusive_scan_by_key( ctrl, keys, keys+11, vals, out, eq );
  * // out => { 1, 1, 2, 1, 2, 3, 1, 2, 3, 4, 1 }
@@ -161,7 +162,7 @@ inclusive_scan_by_key(
     InputIterator1  first1,
     InputIterator1  last1,
     InputIterator2  first2,
-    OutputIterator  result, 
+    OutputIterator  result,
     BinaryPredicate binary_pred,
     const std::string& user_code="" );
 
@@ -175,7 +176,7 @@ inclusive_scan_by_key(
     InputIterator1  first1,
     InputIterator1  last1,
     InputIterator2  first2,
-    OutputIterator  result, 
+    OutputIterator  result,
     BinaryPredicate binary_pred,
     const std::string& user_code="" );
 
@@ -183,6 +184,7 @@ inclusive_scan_by_key(
 
 /*! \brief \p inclusive_scan_by_key performs, on a sequence,
  * an inclusive scan of each sub-sequence as defined by equivalent keys.
+ * inclusive_scan_by_key uses the associative operator binary_op to perform the parallel segmented prefix sum.
  *
  * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.  See bolt::cl::control.
  * \param first1        The first element of the key sequence.
@@ -212,7 +214,7 @@ inclusive_scan_by_key(
  *
  * bolt::cl::equal_to<int> eq;
  * bolt::cl::multiplies<int> mult;
- * bolt::cl::control ctrl = control::getDefault();
+ * bolt::cl::control ctrl = bolt::cl::control::getDefault();
  *
  * bolt::cl::inclusive_scan_by_key( ctrl, keys, keys+11, vals, out, eq, mult );
  * // out => { 2, 2, 4, 2, 4, 8, 2, 4, 8, 16, 2 }
@@ -237,7 +239,7 @@ inclusive_scan_by_key(
     InputIterator1  first1,
     InputIterator1  last1,
     InputIterator2  first2,
-    OutputIterator  result, 
+    OutputIterator  result,
     BinaryPredicate binary_pred,
     BinaryFunction  binary_funct,
     const std::string& user_code="" );
@@ -254,7 +256,7 @@ inclusive_scan_by_key(
     InputIterator1  first1,
     InputIterator1  last1,
     InputIterator2  first2,
-    OutputIterator  result, 
+    OutputIterator  result,
     BinaryPredicate binary_pred,
     BinaryFunction  binary_funct,
     const std::string& user_code="" );
@@ -267,6 +269,7 @@ inclusive_scan_by_key(
 /*! \brief \p exclusive_scan_by_key performs, on a sequence,
  * an exclusive scan of each sub-sequence as defined by equivalent keys;
  * the BinaryFunction in this version is plus(), the BinaryPredicate is equal_to(), and init is 0.
+ * exclusive_scan_by_key uses the associative operator binary_op to perform the parallel segmented prefix sum.
  *
  * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.  See bolt::cl::control.
  * \param first1        The first element of the key sequence.
@@ -289,7 +292,7 @@ inclusive_scan_by_key(
  * int vals[11] = { 1, 1, 1, 1, 1, 1,  1,  1,  1,  1, 1 };
  * int out[11];
  *
- * bolt::cl::control ctrl = control::getDefault();
+ * bolt::cl::control ctrl = bolt::cl::control::getDefault();
  *
  * bolt::cl::exclusive_scan_by_key( ctrl, keys, keys+11, vals, out );
  * // out => { 0, 0, 1, 0, 1, 2, 0, 1, 2, 3, 0 }
@@ -332,6 +335,7 @@ exclusive_scan_by_key(
 /*! \brief \p exclusive_scan_by_key performs, on a sequence,
  * an exclusive scan of each sub-sequence as defined by equivalent keys;
  * the BinaryFunction in this version is plus(), and the BinaryPredicate is equal_to().
+ * exclusive_scan_by_key uses the associative operator binary_op to perform the parallel segmented prefix sum.
  *
  * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.  See bolt::cl::control.
  * \param first1        The first element of the key sequence.
@@ -356,7 +360,7 @@ exclusive_scan_by_key(
  * int vals[11] = { 1, 1, 1, 1, 1, 1,  1,  1,  1,  1, 1 };
  * int out[11];
  *
- * bolt::cl::control ctrl = control::getDefault();
+ * bolt::cl::control ctrl = bolt::cl::control::getDefault();
  *
  * bolt::cl::exclusive_scan_by_key( ctrl, keys, keys+11, vals, out, 0 );
  * // out => { 0, 0, 1, 0, 1, 2, 0, 1, 2, 3, 0 }
@@ -403,6 +407,7 @@ exclusive_scan_by_key(
 /*! \brief \p exclusive_scan_by_key performs, on a sequence,
  * an exclusive scan of each sub-sequence as defined by equivalent keys;
  * the BinaryFunction in this version is plus().
+ * exclusive_scan_by_key uses the associative operator binary_op to perform the parallel segmented prefix sum.
  *
  * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.  See bolt::cl::control.
  * \param first1        The first element of the key sequence.
@@ -430,7 +435,7 @@ exclusive_scan_by_key(
  * int out[11];
  *
  * bolt::cl::equal_to<int> eq;
- * bolt::cl::control ctrl = control::getDefault();
+ * bolt::cl::control ctrl = bolt::cl::control::getDefault();
  *
  * bolt::cl::exclusive_scan_by_key( ctrl, keys, keys+11, vals, out, 1, eq );
  * // out => { 1, 1, 2, 1, 2, 3, 1, 2, 3, 4, 1 }
@@ -479,6 +484,7 @@ exclusive_scan_by_key(
 
 /*! \brief \p exclusive_scan_by_key performs, on a sequence,
  * an exclusive scan of each sub-sequence as defined by equivalent keys.
+ * exclusive_scan_by_key uses the associative operator binary_op to perform the parallel segmented prefix sum.
  *
  * \param ctl           \b Optional Control structure to control command-queue, debug, tuning, etc.  See bolt::cl::control.
  * \param first1        The first element of the key sequence.
@@ -510,7 +516,7 @@ exclusive_scan_by_key(
  *
  * bolt::cl::equal_to<int> eq;
  * bolt::cl::multiplies<int> mult;
- * bolt::cl::control ctrl = control::getDefault();
+ * bolt::cl::control ctrl = bolt::cl::control::getDefault();
  *
  * bolt::cl::exclusive_scan_by_key( ctrl, keys, keys+11, vals, out, 1, eq, mult );
  * // out => { 1, 1, 2, 1, 2, 4, 1, 2, 4, 8, 1 }

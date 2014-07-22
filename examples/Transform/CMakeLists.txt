@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -17,7 +17,7 @@
 
 # List the names of common files to compile across all platforms
 set( clBolt.Example.Transform.Source Transform.cpp )
-set( clBolt.Example.Transform.Headers ${BOLT_INCLUDE_DIRS}/bolt/cl/transform.h ${BOLT_INCLUDE_DIRS}/bolt/cl/detail/transform.inl )
+set( clBolt.Example.Transform.Headers ${BOLT_INCLUDE_DIRS}/bolt/cl/transform.h)
 
 set( clBolt.Example.Transform.Files ${clBolt.Example.Transform.Source} ${clBolt.Example.Transform.Headers} )
 

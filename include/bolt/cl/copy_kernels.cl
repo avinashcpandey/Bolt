@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -16,17 +16,23 @@
 
 
 // 1 thread / element: 166 GB/s
-template < typename iType, typename oType >
+template < typename iType, typename iIterType, typename oType, typename oIterType >
 __kernel
 void copy_I(
     global iType * restrict src,
+	iIterType input_iter,
     global oType * restrict dst,
-    const uint numElements )
+	oIterType output_iter,
+    const uint numElements) 
 {
+    input_iter.init( src );
+    output_iter.init( dst );
+
     size_t gloIdx = get_global_id( 0 );
-    if( gloIdx >= numElements ) return; // on SI this doesn't mess-up barriers
-    
-    dst[ gloIdx ] = src[ gloIdx ];
+    if( gloIdx >= numElements) return; // on SI this doesn't mess-up barriers
+
+	output_iter[ gloIdx ] = input_iter[ gloIdx ];
+
 };
 
 

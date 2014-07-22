@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -17,7 +17,7 @@
 
 # List the names of common files to compile across all platforms
 set( clBolt.Bench.Scan.Source stdafx.cpp Scan.cpp )
-set( clBolt.Bench.Scan.Headers stdafx.h targetver.h ${BOLT_INCLUDE_DIR}/bolt/cl/Scan.h )
+set( clBolt.Bench.Scan.Headers stdafx.h targetver.h ${BOLT_INCLUDE_DIR}/bolt/cl/scan.h )
 
 set( clBolt.Bench.Scan.Files ${clBolt.Bench.Scan.Source} ${clBolt.Bench.Scan.Headers} )
 

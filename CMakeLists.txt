@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -32,7 +32,7 @@ if( NOT DEFINED Bolt_VERSION_MAJOR )
 endif( )
 
 if( NOT DEFINED Bolt_VERSION_MINOR )
-   set( Bolt_VERSION_MINOR 0 )
+   set( Bolt_VERSION_MINOR 2 )
 endif( )
 
 if( NOT DEFINED Bolt_VERSION_PATCH )
@@ -61,16 +61,20 @@ if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
 endif( )
 
 # Set the default of CMAKE_BUILD_TYPE to be release, unless user specifies with -D.  MSVC_IDE does not use CMAKE_BUILD_TYPE
-if( NOT MSVC_IDE AND NOT CMAKE_BUILD_TYPE )
-  set( CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE )
-endif()
+#if( NOT MSVC_IDE AND NOT CMAKE_BUILD_TYPE )
+#  set( CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE )
+#endif()
+
+set_property( GLOBAL PROPERTY USE_FOLDERS TRUE )
 
 if( MSVC_IDE )
     set( Bolt_BUILD64 ${CMAKE_CL_64} )
-    set_property( GLOBAL PROPERTY USE_FOLDERS TRUE )
 else()
-    option( Bolt_BUILD64 "Build a 64-bit product" ON )
+#    option( Bolt_BUILD64 "Build a 64-bit product" ON )
+ set( CMAKE_BUILD_TYPE ${BOLT_BUILD_TYPE} CACHE STRING "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE )   
 endif()
+ message( STATUS "64bit build :" ${Bolt_BUILD64} )
+ message( STATUS "Build Type R/D:" ${CMAKE_BUILD_TYPE} )
 
 # Modify the global find property to help us find libraries like Boost in the correct paths for 64-bit
 # Essentially, find_library calls will look for /lib64 instead of /lib; works for windows and linux
@@ -83,7 +87,14 @@ else()
 endif()
 
 # Various options below on configuring the build, and how to generate the solution files
-option( BUILD_ampBolt "Create a solution that compiles Bolt for AMP" ON )
+
+if ( MSVC )
+    set(Bolt_ampDefault ON)
+else ()
+    set(Bolt_ampDefault OFF)
+endif() 
+
+option( BUILD_ampBolt "Create a solution that compiles Bolt for AMP"  ${Bolt_ampDefault})
 option( BUILD_clBolt "Create a solution that compiles Bolt for OpenCL" ON )
 option( BUILD_StripSymbols "When making debug builds, remove symbols and program database files" OFF )
  
@@ -135,15 +146,30 @@ if( C_COMPILER_NAME STREQUAL "cl" )
     if( BUILD_StripSymbols )
         string( REGEX REPLACE "/Zi" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" )
     endif()
-elseif( C_COMPILER_NAME STREQUAL "gcc" )
+elseif( ( C_COMPILER_NAME STREQUAL "gcc" ) OR ( CMAKE_COMPILER_IS_GNUCXX GREATER  0 ))
     message( STATUS "Detected GNU fortran compiler." )
+    set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
     
     if( Bolt_BUILD64 )
         set( CMAKE_CXX_FLAGS "-m64 ${CMAKE_CXX_FLAGS}" )
         set( CMAKE_C_FLAGS "-m64 ${CMAKE_C_FLAGS}" )
+        execute_process(COMMAND lsb_release -irc 
+	OUTPUT_VARIABLE suse-ubuntu)
+	STRING(FIND $(suse_ubuntu) "Ubuntu" pos)
+	SET(com -1)
+	if($(pos) EQUAL com)
+		set( CMAKE_SHARED_LINKER_FLAGS "-m64 ${CMAKE_SHARED_LINKER_FLAGS}" )
+		set( CMAKE_EXE_LINKER_FLAGS "-lpthread -m64 ${CMAKE_EXE_LINKER_FLAGS}" )
+	else()
+		set( CMAKE_EXE_LINKER_FLAGS " -m64 ${CMAKE_EXE_LINKER_FLAGS}" )
+		set( CMAKE_SHARED_LINKER_FLAGS "-lpthread -m64 ${CMAKE_SHARED_LINKER_FLAGS}" )
+	endif()
+
     else( )
-        set( CMAKE_CXX_FLAGS "-m32 ${CMAKE_CXX_FLAGS}" )
-        set( CMAKE_C_FLAGS "-m32 ${CMAKE_C_FLAGS}" )
+        set( CMAKE_CXX_FLAGS "-m32 -msse2 ${CMAKE_CXX_FLAGS}" )
+        set( CMAKE_C_FLAGS "-m32 -msse2 ${CMAKE_C_FLAGS}" )
+        set( CMAKE_SHARED_LINKER_FLAGS "-m32 ${CMAKE_SHARED_LINKER_FLAGS}" )
+        set( CMAKE_EXE_LINKER_FLAGS "-lpthread -m32 ${CMAKE_EXE_LINKER_FLAGS}" )
     endif( )
 else( )
     message( AUTHOR_WARNING "Compiler not recognized.  Using default flags." )
@@ -199,16 +225,16 @@ endif( )
 # Build TBB library
 if( BUILD_TBB )
     # This will define TBB_FOUND
-    message ("Setting up TBB paths")
+    message ( STATUS "Setting up TBB paths")
     find_package( TBB REQUIRED )
     if ( TBB_FOUND )
-        message("TBB is found installed in the path:" ${TBB_INSTALL_DIR} )
+        message( STATUS "TBB is found installed in the path:" ${TBB_ROOT} )
         #list( APPEND Bolt.Dependencies TBB )
     else ( ) 
-        message( FATAL_ERROR "TBB not found. Install TBB and set TBB_INSTALL_DIR env variable" )
+        message( FATAL_ERROR "TBB not found. Install TBB and set TBB_ROOT env variable" )
         #message( STATUS "Setting up TBB external..." )
         #include( ExternalTBB )
-        #message( STATUS "TBB_ROOT configured as: " ${TBB_INSTALL_DIR} )
+        #message( STATUS "TBB_ROOT configured as: " ${TBB_ROOT} )
         #list( APPEND Bolt.Dependencies TBB )
         #list( APPEND Bolt.Cmake.Args -DBUILD_TBB=TRUE )
     endif( )
@@ -236,9 +262,9 @@ if( BUILD_examples )
 endif( )
 
 # configure a header file to pass the CMake version settings to the source, and package the header files in the output archive
-configure_file( "${PROJECT_SOURCE_DIR}/include/bolt/boltVersion.h.in" "${PROJECT_BINARY_DIR}/include/bolt/boltVersion.h" @ONLY )
+configure_file( "${PROJECT_SOURCE_DIR}/include/bolt/BoltVersion.h.in" "${PROJECT_BINARY_DIR}/include/bolt/BoltVersion.h" @ONLY )
 install( FILES 
-            "${PROJECT_BINARY_DIR}/include/bolt/boltVersion.h" 
+            "${PROJECT_BINARY_DIR}/include/bolt/BoltVersion.h" 
         DESTINATION 
             ${INCLUDE_DIR}/bolt )
 
@@ -274,7 +300,7 @@ else( )
 endif( )
 
 set( CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${Bolt_VERSION}-${CMAKE_HOST_SYSTEM_NAME}-Source")
-set( CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/ReadMeBuild.html")
+#set( CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/ReadMeBuild.html")
 set( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
 set( CPACK_PACKAGE_VERSION_MAJOR ${Bolt_VERSION_MAJOR} )
 set( CPACK_PACKAGE_VERSION_MINOR ${Bolt_VERSION_MINOR} )

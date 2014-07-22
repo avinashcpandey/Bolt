@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
 
 ***************************************************************************/
 
+#if !defined( BOLT_CL_PAIR_INL )
+#define BOLT_CL_PAIR_INL
+#pragma once
 
-#include <bolt/cl/pair.h>
 
 namespace bolt
 {
@@ -171,7 +173,7 @@ namespace bolt
         } // end get()
 
         template<unsigned int N, typename T1, typename T2>
-            const typename tuple_element<N, pair<T1,T2> >::type &   
+            const typename tuple_element<N, pair<T1,T2> >::type &
                 get(const pair<T1,T2> &p)
         {
             return detail::pair_get<N, pair<T1,T2> >()(p);
@@ -180,5 +182,6 @@ namespace bolt
     } //end of cl
 } // end bolt
 
+#endif
 
 

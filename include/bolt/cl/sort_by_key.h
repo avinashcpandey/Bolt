@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -15,17 +15,15 @@
 
 ***************************************************************************/
 
-#if !defined( SORT_BY_KEY_H )
-#define SORT_BY_KEY_H
+#if !defined( BOLT_CL_SORT_BY_KEY_H )
+#define BOLT_CL_SORT_BY_KEY_H
 #pragma once
 
-#include <bolt/cl/bolt.h>
-#include <bolt/cl/functional.h>
-#include <string>
-#include <iostream>
+#include "bolt/cl/device_vector.h"
+#include "bolt/cl/functional.h"
 
 /*! \file bolt/cl/sort_by_key.h
-    \brief Returns the sorted result of all the elements in input besed on equivalent keys.
+    \brief Returns the sorted result of all the elements in input based on equivalent keys.
 */
 
 namespace bolt {
@@ -39,27 +37,27 @@ namespace bolt {
         *   \ingroup algorithms
         *   An Algorithm for sorting the given InputIterator.
         *   It is capable of sorting the arithmetic data types, or the user-defined data types. For common code between
-        *   the host and device, take a look at the ClCode and TypeName implementations. See the Bolt Tools for 
+        *   the host and device, take a look at the ClCode and TypeName implementations. See the Bolt Tools for
         *   Split-Source
         *   for a detailed description.
         */
 
-        /*! \addtogroup CL-sort
+        /*! \addtogroup CL-sort_by_key
         *   \ingroup sorting
         *   \{
         */
 
-        /*! \brief This version of \p sort_by_key  returns the sorted result of all the elements in the 
-        * \p RandomAccessIterator between the the first and last elements key elements and corresponding values. The 
-        * routine arranges the elements in an ascending order. 
+        /*! \brief This version of \p sort_by_key  returns the sorted result of all the elements in the
+        * \p RandomAccessIterator between the the first and last elements key elements and corresponding values. The
+        * routine arranges the elements in an ascending order.
         *
         *
         * \param ctl \b Optional Control structure to control command-queue, debug, tuning, etc. See bolt::cl::control.
         * \param keys_first The first position in the sequence to be sorted.
         * \param keys_last  The last position in the sequence to be sorted.
         * \param values_first  The  first position in the value sequence.
-        * \param cl_code Optional OpenCL(TM) code to be passed to the OpenCL compiler. The cl_code is inserted first in 
-        * the generated code, before the cl_code traits. This can be used for any extra cl code that is to be passed 
+        * \param cl_code Optional OpenCL(TM) code to be passed to the OpenCL compiler. The cl_code is inserted first in
+        * the generated code, before the cl_code traits. This can be used for any extra cl code that is to be passed
         * when compiling the OpenCl Kernel.
         * \return The sorted key,value pair that is available in place.
         *
@@ -68,7 +66,7 @@ namespace bolt {
         *  \tparam RandomAccessIterator2  Is a model of http://www.sgi.com/tech/stl/RandomAccessIterator.html
         *
         *
-        * \details The following code example shows the use of \p sort_by_key to sort the key,value pair in the 
+        * \details The following code example shows the use of \p sort_by_key to sort the key,value pair in the
         * ascending order.
         * \code
         * #include <bolt/cl/sort_by_key.h>
@@ -84,7 +82,7 @@ namespace bolt {
         *  \endcode
         */
         template<typename RandomAccessIterator1 , typename RandomAccessIterator2>
-        void sort_by_key(const bolt::cl::control &ctl,
+        void sort_by_key(bolt::cl::control &ctl,
                          RandomAccessIterator1 keys_first,
                          RandomAccessIterator1 keys_last,
                          RandomAccessIterator2 values_first,
@@ -96,9 +94,9 @@ namespace bolt {
                          RandomAccessIterator2 values_first,
                          const std::string& cl_code="");
 
-        /*! \brief This version of \p sort_by_key  returns the sorted result of all the elements in the 
-        * \p RandomAccessIterator between the the first and last elements key elements and corresponding values. The 
-        * routine arranges the elements in an ascending order. 
+        /*! \brief This version of \p sort_by_key  returns the sorted result of all the elements in the
+        * \p RandomAccessIterator between the the first and last elements key elements and corresponding values. The
+        * routine arranges the elements in an ascending order.
         * \details This routine uses function object comp to compare the key objects.
         *
         * \param ctl \b Optional Control structure to control command-queue, debug, tuning, etc. See bolt::cl::control.
@@ -106,16 +104,16 @@ namespace bolt {
         * \param keys_last  The last position in the sequence to be sorted.
         * \param values_first  The  first position in the value sequence.
         * \param comp  The comparison operation used to compare two values.
-        * \param cl_code Optional OpenCL(TM) code to be passed to the OpenCL compiler. The cl_code is inserted first in 
-        * the generated code, before the cl_code traits. This can be used for any extra cl code that is to be passed 
+        * \param cl_code Optional OpenCL(TM) code to be passed to the OpenCL compiler. The cl_code is inserted first in
+        * the generated code, before the cl_code traits. This can be used for any extra cl code that is to be passed
         * when compiling the OpenCl Kernel.
         * \return The sorted key,value pair that is available in place.
         *
         *  \tparam RandomAccessIterator1 Is a model of http://www.sgi.com/tech/stl/RandomAccessIterator.html
         *  \tparam RandomAccessIterator2  Is a model of http://www.sgi.com/tech/stl/RandomAccessIterator.html
-        *  \tparam StrictWeakOrdering Is a model of http://www.sgi.com/tech/stl/StrictWeakOrdering.html. 
+        *  \tparam StrictWeakOrdering Is a model of http://www.sgi.com/tech/stl/StrictWeakOrdering.html.
         *
-        * \details The following code example shows the use of \p sort_by_key to sort the key,value pair in the 
+        * \details The following code example shows the use of \p sort_by_key to sort the key,value pair in the
         * ascending order.
         * \code
         * #include <bolt/cl/sort_by_key.h>
@@ -133,7 +131,7 @@ namespace bolt {
         */
 
         template<typename RandomAccessIterator1 , typename RandomAccessIterator2 , typename StrictWeakOrdering>
-        void sort_by_key(const bolt::cl::control &ctl,
+        void sort_by_key(bolt::cl::control &ctl,
                   RandomAccessIterator1 keys_first,
                   RandomAccessIterator1 keys_last,
                   RandomAccessIterator2 values_first,

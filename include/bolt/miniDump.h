@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -14,6 +14,7 @@
 *   limitations under the License.                                                   
 
 ***************************************************************************/                                                                                     
+#if defined(_WIN32)
 
 #ifndef MINIDUMP_H_
 #define MINIDUMP_H_
@@ -75,3 +76,5 @@ namespace bolt
 }
 
 #endif /* CLAMDBLAS_H_ */
+#endif
+

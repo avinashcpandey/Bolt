@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -17,15 +17,27 @@
 
 //#pragma OPENCL EXTENSION cl_amd_printf : enable
 
-#define _REDUCE_STEP(_LENGTH, _IDX, _W) \
-    if ((_IDX < _W) && ((_IDX + _W) < _LENGTH)) {\
+#define _REDUCE_STEP_MIN(_LENGTH, _IDX, _W)\
+if ((_IDX < _W) && ((_IDX + _W) < _LENGTH)) {\
       iTypePtr mine = scratch[_IDX];\
       iTypePtr other = scratch[_IDX + _W];\
-      stat = (*userFunctor)(mine, other);\
-      scratch[_IDX] = stat ? mine : other ; \
-      scratch_index[_IDX] = stat ? scratch_index[_IDX] : scratch_index[_IDX + _W];\
-    }\
+		stat = (*userFunctor)(mine, other);\
+		scratch[_IDX] = stat ? mine : other ;\
+		scratch_index[_IDX] = stat ? scratch_index[_IDX]:scratch_index[_IDX + _W];\
+		}\
     barrier(CLK_LOCAL_MEM_FENCE);
+
+
+	#define _REDUCE_STEP_MAX(_LENGTH, _IDX, _W)\
+	if ((_IDX < _W) && ((_IDX + _W) < _LENGTH)) {\
+      iTypePtr mine = scratch[_IDX];\
+      iTypePtr other = scratch[_IDX + _W];\
+		stat = (*userFunctor)(other, mine);\
+		scratch[_IDX] = stat ? mine : other ;\
+		scratch_index[_IDX] = stat ? scratch_index[_IDX]:scratch_index[_IDX + _W];\
+		}\
+    barrier(CLK_LOCAL_MEM_FENCE);
+
 
 template< typename iTypePtr, typename iTypeIter, typename binary_function >
 kernel void min_elementTemplate(
@@ -40,26 +52,31 @@ kernel void min_elementTemplate(
 {
     int gx = get_global_id (0);
     int igx = gx;
+    int gloId = gx;
     bool stat;
-    //  Abort threads that are passed the end of the input vector
-    if( gx >= length )
-        return;
-
+    
     input_iter.init( input_ptr );
 
     //  Initialize the accumulator private variable with data from the input array
     //  This essentially unrolls the loop below at least once
-    iTypePtr accumulator = input_iter[gx];
-    gx += get_global_size(0);
+    iTypePtr accumulator;
+    if(gloId < length){
+       accumulator = input_iter[gx];
+       gx += get_global_size(0);
+    }
 
     // Loop sequentially over chunks of input vector, reducing an arbitrary size input
-    // length into a length related to the number of workgroups
+    // length into a length related to the number of workgroupsz
     while (gx < length)
     {
         iTypePtr element = input_iter[gx];
-        stat =  (*userFunctor)(accumulator, element);
-        accumulator = stat ? accumulator:element;
-        igx = stat ? igx : gx;
+		#if defined(_IS_MAX_KERNEL)
+			stat =  (*userFunctor)(element, accumulator);			
+		#else if
+			stat =  (*userFunctor)(accumulator, element);
+		#endif
+		accumulator = stat ? accumulator : element;
+		igx = stat ? igx : gx;
         gx += get_global_size(0);
     }
 
@@ -74,13 +91,32 @@ kernel void min_elementTemplate(
 
     // Parallel reduction within a given workgroup using local data store
     // to share values between workitems
-    _REDUCE_STEP(tail, local_index, 32);
-    _REDUCE_STEP(tail, local_index, 16);
-    _REDUCE_STEP(tail, local_index,  8);
-    _REDUCE_STEP(tail, local_index,  4);
-    _REDUCE_STEP(tail, local_index,  2);
-    _REDUCE_STEP(tail, local_index,  1);
+
+ #if defined(_IS_MAX_KERNEL)
+    _REDUCE_STEP_MAX(tail, local_index, 128);
+    _REDUCE_STEP_MAX(tail, local_index, 64);
+    _REDUCE_STEP_MAX(tail, local_index, 32);
+    _REDUCE_STEP_MAX(tail, local_index, 16);
+    _REDUCE_STEP_MAX(tail, local_index,  8);
+    _REDUCE_STEP_MAX(tail, local_index,  4);
+    _REDUCE_STEP_MAX(tail, local_index,  2);
+    _REDUCE_STEP_MAX(tail, local_index,  1);	
+#else if
+    _REDUCE_STEP_MIN(tail, local_index, 128);
+    _REDUCE_STEP_MIN(tail, local_index, 64);      
+	  _REDUCE_STEP_MIN(tail, local_index, 32);
+    _REDUCE_STEP_MIN(tail, local_index, 16);
+    _REDUCE_STEP_MIN(tail, local_index,  8);
+    _REDUCE_STEP_MIN(tail, local_index,  4);
+    _REDUCE_STEP_MIN(tail, local_index,  2);
+    _REDUCE_STEP_MIN(tail, local_index,  1);
+#endif
+
  
+    //  Abort threads that are passed the end of the input vector
+    if( gloId >= length )
+        return;
+
     //  Write only the single reduced value for the entire workgroup
     if (local_index == 0) 
     {

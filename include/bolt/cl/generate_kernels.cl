@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -18,18 +18,22 @@
 // BURST_SIZE = 1,2...64
 
 // 1 thread per element
-template <typename oType, typename Generator>
+template <typename oType, typename Generator,  typename iIterType>
 __kernel
 void generate_I(
     global oType * restrict dst,
+	 iIterType input_iter,
     const int numElements,
     global Generator * restrict genPtr)
 {
+    input_iter.init(dst);
+
     int gloIdx = get_global_id(0);
 #if BOUNDARY_CHECK
     if (gloIdx < numElements)
 #endif
-        dst[gloIdx] = (*genPtr)();
+
+	input_iter[gloIdx] = (*genPtr)();
 }
 
 

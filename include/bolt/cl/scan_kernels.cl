@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   ? 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -77,132 +77,99 @@ kernel void HSA_Scan(
 /******************************************************************************
  *  Kernel 2
  *****************************************************************************/
-template< typename iPtrType, typename iIterType, typename BinaryFunction >
+template< typename iPtrType, typename iIterType, typename oPtrType, typename oIterType, typename BinaryFunction, typename initType >
 kernel void perBlockAddition( 
-                global iPtrType* output_ptr,
-                iIterType    output_iter, 
-                global iPtrType* postSumArray_ptr,
+                global oPtrType* output_ptr,
+                oIterType    output_iter, 
+                global iPtrType* input_ptr,
+                iIterType    input_iter, 
+                global typename iIterType::value_type* preSumArray,
+                global typename iIterType::value_type* preSumArray1,
+                local typename iIterType::value_type* lds,
                 const uint vecSize,
-    global BinaryFunction* binaryOp )
+                global BinaryFunction* binaryOp,
+                int exclusive,
+                initType identity )
 {
-    // BinaryFunction bf = *binaryOp;
     
 // 1 thread per element
-#if 1
     size_t gloId = get_global_id( 0 );
     size_t groId = get_group_id( 0 );
     size_t locId = get_local_id( 0 );
-
-    //  Abort threads that are passed the end of the input vector
-    if( gloId >= vecSize )
-        return;
-        
+    size_t wgSize = get_local_size( 0 );
     output_iter.init( output_ptr );
+    input_iter.init( input_ptr );
 
-    iPtrType scanResult = output_iter[ gloId ];
-
-    // accumulate prefix
-    if (groId > 0)
-    {
-        iPtrType postBlockSum = postSumArray_ptr[ groId - 1];
-        iPtrType newResult = (*binaryOp)( scanResult, postBlockSum );
-        output_iter[ gloId ] = newResult;
+  // if exclusive, load gloId=0 w/ identity, and all others shifted-1
+    typename iIterType::value_type val;
+  
+    if (gloId < vecSize){
+	   if (exclusive)
+       {
+          if (gloId > 0)
+          { // thread>0
+              val = input_iter[gloId-1];
+              lds[ locId ] = val;
+          }
+          else
+          { // thread=0
+              val = identity;
+              lds[ locId ] = val;
+          }
+       }
+       else
+       {
+          val = input_iter[gloId];
+          lds[ locId ] = val;
+       }
     }
-#endif
+  
+   typename iIterType::value_type scanResult = lds[locId];
+   typename iIterType::value_type postBlockSum, newResult;
+   typename iIterType::value_type y, y1, sum;
 
-// section increments
-#if 0
-    size_t wgSize  = get_local_size( 0 );
-    size_t wgIdx   = get_group_id( 0 );
-    size_t locId   = get_local_id( 0 );
-    size_t secSize = wgSize / NUM_ITER; // threads per section (256 element)
+   if(locId == 0 && gloId < vecSize)
+   {
+      if(groId > 0) {
+         if(groId % 2 == 0)
+             postBlockSum = preSumArray[ groId/2 -1 ];
+         else if(groId == 1)
+             postBlockSum = preSumArray1[0];
+         else {
+              y = preSumArray[ groId/2 -1 ];
+              y1 = preSumArray1[groId/2];
+              postBlockSum = (*binaryOp)(y, y1);
+         }
+         if (!exclusive)
+            newResult = (*binaryOp)( scanResult, postBlockSum );
+		 else 
+		    newResult =  postBlockSum;
+     }
+     else {
+       newResult = scanResult;
+     }
+	 lds[ locId ] = newResult;
+   }
+  
+    //  Computes a scan within a workgroup
+    sum = lds[ locId ];
+    for( size_t offset = 1; offset < wgSize; offset *= 2 )
+    {
+        barrier( CLK_LOCAL_MEM_FENCE );
+        if (locId >= offset)
+        {
+            typename iIterType::value_type y = lds[ locId - offset ];
+            sum = (*binaryOp)( sum, y );
+        }
+        barrier( CLK_LOCAL_MEM_FENCE );
+        lds[ locId ] = sum;
+    }
+    barrier( CLK_LOCAL_MEM_FENCE );
+    //  Abort threads that are passed the end of the input vector
+    if (gloId >= vecSize) return; 
+   
+    output_iter[ gloId ] = sum;
     
-    size_t secIdx  = NUM_ITER*wgIdx+locId/secSize;
-    size_t elemIdx = secIdx*wgSize+locId%secSize;
-    Type postBlockSum;
-    if (secIdx==0) return;
-    postBlockSum = postSumArray[ secIdx-1 ];
-    
-    size_t maxElemIdx = MIN( vecSize, elemIdx+secSize*NUM_ITER );
-    for ( ; elemIdx<maxElemIdx; elemIdx+=secSize)
-    {
-        Type scanResult   = output[ elemIdx ];
-        Type newResult    = (*binaryOp)( scanResult, postBlockSum );
-        output[ elemIdx ] = newResult;
-    }
-
-#endif
-
-// work-group increments
-#if 0
-    size_t wgSize  = get_local_size( 0 );
-    size_t wgIdx   = get_group_id( 0 );
-    size_t locId   = get_local_id( 0 );
-    size_t secSize = wgSize;
-    
-    size_t secIdx  = NUM_ITER*wgIdx; // to be incremented
-    size_t elemIdx = secIdx*secSize+locId;
-    //Type postBlockSum;
-    //if (secIdx==0) return;
-    
-    size_t maxSecIdx = secIdx+NUM_ITER;
-    size_t maxElemIdx = MIN( vecSize, elemIdx+secSize*NUM_ITER);
-    // secIdx = MAX( 1, secIdx);
-    if (wgIdx==0) // skip
-    {
-        secIdx++;
-        elemIdx+=secSize;
-    }
-    for ( ; elemIdx<maxElemIdx; secIdx++, elemIdx+=secSize)
-    {
-        Type postBlockSum = postSumArray[ secIdx-1 ];
-        Type scanResult   = output[ elemIdx ];
-        Type newResult    = (*binaryOp)( scanResult, postBlockSum );
-        output[ elemIdx ] = newResult;
-    }
-#endif
-
-// threads increment
-#if 0
-
-    size_t wgSize  = get_local_size( 0 );
-    size_t wgIdx   = get_group_id( 0 );
-    size_t locId   = get_local_id( 0 );
-    size_t threadsPerSect = wgSize / NUM_ITER;
-    
-    size_t secIdx  = NUM_ITER*wgIdx;
-    size_t elemIdx = secIdx*wgSize+locId*NUM_ITER;
-
-    if (elemIdx < vecSize && secIdx > 0)
-    {
-        Type scanResult   = output[ elemIdx ];
-        Type postBlockSum = postSumArray[ secIdx-1 ];
-        Type newResult    = (*binaryOp)( scanResult, postBlockSum );
-        output[ elemIdx ] = newResult;
-    }
-    //secIdx++;
-    elemIdx++; //=wgSize;
-
-    for (size_t i = 1; i < NUM_ITER-1; i++)
-    {
-      Type scanResult   = output[ elemIdx ];
-      Type postBlockSum = postSumArray[ secIdx-1 ];
-      Type newResult    = (*binaryOp)( scanResult, postBlockSum );
-      output[ elemIdx ] = newResult;
-      
-      // secIdx++;
-      elemIdx++; //=wgSize;
-    }
-
-    if (elemIdx < vecSize /*&& groId > 0*/)
-    {
-        Type scanResult = output[ elemIdx ];
-        Type postBlockSum = postSumArray[ secIdx-1 ];
-        Type newResult = (*binaryOp)( scanResult, postBlockSum );
-        output[ elemIdx ] = newResult;
-    }
-
-#endif
 }
 
 
@@ -211,7 +178,6 @@ kernel void perBlockAddition(
  *****************************************************************************/
 template< typename iPtrType, typename initType, typename BinaryFunction >
 kernel void intraBlockInclusiveScan(
-                global iPtrType* postSumArray,
                 global iPtrType* preSumArray, 
                 initType identity,
                 const uint vecSize,
@@ -224,7 +190,6 @@ kernel void intraBlockInclusiveScan(
     size_t locId = get_local_id( 0 );
     size_t wgSize = get_local_size( 0 );
     uint mapId  = gloId * workPerThread;
-	
     // do offset of zero manually
     uint offset;
     iPtrType workSum;
@@ -233,7 +198,6 @@ kernel void intraBlockInclusiveScan(
         // accumulate zeroth value manually
         offset = 0;
         workSum = preSumArray[mapId+offset];
-        postSumArray[ mapId + offset ] = workSum;
 
         //  Serial accumulation
         for( offset = offset+1; offset < workPerThread; offset += 1 )
@@ -242,15 +206,14 @@ kernel void intraBlockInclusiveScan(
             {
                 iPtrType y = preSumArray[mapId+offset];
                 workSum = (*binaryOp)( workSum, y );
-                postSumArray[ mapId + offset ] = workSum;
             }
         }
     }
     barrier( CLK_LOCAL_MEM_FENCE );
     iPtrType scanSum = workSum;
-	lds[ locId ] = workSum;
+    lds[ locId ] = workSum;
     offset = 1;
-	// scan in lds
+  // scan in lds
     for( offset = offset*1; offset < wgSize; offset *= 2 )
     {
         barrier( CLK_LOCAL_MEM_FENCE );
@@ -262,102 +225,106 @@ kernel void intraBlockInclusiveScan(
                 scanSum = (*binaryOp)( scanSum, y );
             }
         }
-		barrier( CLK_LOCAL_MEM_FENCE );
+        barrier( CLK_LOCAL_MEM_FENCE );
         lds[ locId ] = scanSum;  
-		
+
     } // for offset
-    //barrier( CLK_LOCAL_MEM_FENCE );
-	
+    barrier( CLK_LOCAL_MEM_FENCE );
     // write final scan from pre-scan and lds scan
-	
-    for( offset = 0; offset < workPerThread; offset += 1 )
+     workSum = preSumArray[mapId];
+     if(locId > 0){
+        iPtrType y = lds[locId-1];
+        workSum = (*binaryOp)(workSum, y);
+        preSumArray[ mapId] = workSum;
+     }
+     else{
+       preSumArray[ mapId] = workSum;
+    }
+    for( offset = 1; offset < workPerThread; offset += 1 )
     {
         barrier( CLK_GLOBAL_MEM_FENCE );
 
-        if (mapId < vecSize && locId > 0)
+        if ((mapId + offset) < vecSize && locId > 0)
         {
-            iPtrType y = postSumArray[ mapId + offset ];
-            iPtrType y2 = lds[locId-1];
-            y = (*binaryOp)( y, y2 );
-            postSumArray[ mapId + offset ] = y;
+            iPtrType y  = preSumArray[ mapId + offset ] ;
+            iPtrType y1 = (*binaryOp)(y, workSum);
+            preSumArray[ mapId + offset ] = y1;
+            workSum = y1;
+
         } // thread in bounds
+        else if((mapId + offset) < vecSize){
+           iPtrType y  = preSumArray[ mapId + offset ] ;
+           preSumArray[ mapId + offset ] = (*binaryOp)(y, workSum);
+           workSum = preSumArray[ mapId + offset ];
+        }
 
     } // for 
-	
+
+
 } // end kernel
 
 
 /******************************************************************************
  *  Kernel 0
  *****************************************************************************/
-template< typename iPtrType, typename iIterType, typename oPtrType, typename oIterType, typename initType, typename BinaryFunction >
+template< typename iPtrType, typename iIterType, typename initType, typename BinaryFunction >
 kernel void perBlockInclusiveScan(
-                global oPtrType* output_ptr,
-                oIterType    output_iter, 
                 global iPtrType* input_ptr,
                 iIterType    input_iter, 
                 initType identity,
                 const uint vecSize,
-                local oPtrType* lds,
+                local typename iIterType::value_type* lds,
                 global BinaryFunction* binaryOp,
-                global oPtrType* scanBuffer,
+                global typename iIterType::value_type* preSumArray,
+                global typename iIterType::value_type* preSumArray1,
                 int exclusive) // do exclusive scan ?
 {
+// 2 thread per element
     size_t gloId = get_global_id( 0 );
     size_t groId = get_group_id( 0 );
     size_t locId = get_local_id( 0 );
-    size_t wgSize = get_local_size( 0 );
+    size_t wgSize = get_local_size( 0 )  ;
 
-    //  Abort threads that are passed the end of the input vector
-    if (gloId >= vecSize) return; // on SI this doesn't mess-up barriers
-
-    output_iter.init( output_ptr );
+    wgSize *=2;
     input_iter.init( input_ptr );
+    size_t offset = 1;
 
-    // if exclusive, load gloId=0 w/ identity, and all others shifted-1
-    oPtrType val;
-    if (exclusive)
-    {
-        if (gloId > 0)
-        { // thread>0
-            val = input_iter[gloId-1];
-            lds[ locId ] = val;
-        }
-        else
-        { // thread=0
-            val = identity;
-            lds[ locId ] = val;
-        }
-    }
-    else
-    {
-        val = input_iter[gloId];
-        lds[ locId ] = val;
-    }
+   // load input into shared memory
+   
+    uint input_offset = (groId*wgSize)+locId;
 
-    //  Computes a scan within a workgroup
-    oPtrType sum = val;
-    for( size_t offset = 1; offset < wgSize; offset *= 2 )
-    {
-        barrier( CLK_LOCAL_MEM_FENCE );
-        if (locId >= offset)
-        {
-            oPtrType y = lds[ locId - offset ];
-            sum = (*binaryOp)( sum, y );
-        }
-        barrier( CLK_LOCAL_MEM_FENCE );
-        lds[ locId ] = sum;
+	if(input_offset < vecSize)
+       lds[locId] = input_iter[input_offset];
+    if(input_offset+(wgSize/2) < vecSize)
+        lds[locId+(wgSize/2)] = input_iter[ input_offset+(wgSize/2)];
+    
+	// Exclusive case
+    if(exclusive && gloId == 0)
+	{
+	    typename iIterType::value_type start_val = input_iter[0];
+		lds[locId] = (*binaryOp)(identity, start_val);
     }
-
-    //  Each work item writes out its calculated scan result, relative to the beginning
-    //  of each work group
-    output_iter[ gloId ] = sum;
-    barrier( CLK_LOCAL_MEM_FENCE ); // needed for large data types
+	
+    for (size_t start = wgSize>>1; start > 0; start >>= 1) 
+    {
+       barrier( CLK_LOCAL_MEM_FENCE );
+       if (locId < start)
+       {
+          size_t temp1 = offset*(2*locId+1)-1;
+          size_t temp2 = offset*(2*locId+2)-1;
+          typename iIterType::value_type y = lds[temp2];
+          typename iIterType::value_type y1 =lds[temp1];
+          lds[temp2] = (*binaryOp)(y, y1);
+       }
+       offset *= 2;
+    }
+    barrier( CLK_LOCAL_MEM_FENCE );
     if (locId == 0)
     {
-        // last work-group can be wrong b/c ignored
-        scanBuffer[ groId ] = lds[ wgSize-1 ];
+        preSumArray[ groId ] = lds[wgSize -1];
+        preSumArray1[ groId ] = lds[wgSize/2 -1];
     }
+  
 }
 
 // not using HSA

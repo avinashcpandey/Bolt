@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -47,26 +47,32 @@ include_directories(
     ${BOLT_CL_TEST_DIR} 
     ${TBB_INCLUDE_DIRS} ) 
 
+add_subdirectory( BinarySearchTest )
 add_subdirectory( ControlTest )
 add_subdirectory( CopyTest )
 add_subdirectory( CountTest )
 add_subdirectory( ConstantIteratorTest )
 add_subdirectory( DeviceVectorTest )
 add_subdirectory( FillTest )
+add_subdirectory( GatherTest )
 add_subdirectory( GenerateTest )
 add_subdirectory( InnerProductTest )
 add_subdirectory( MaxElementTest )
+add_subdirectory( MergeTest )
 add_subdirectory( MinElementTest )
 add_subdirectory( PairTest )
+add_subdirectory( PermutationIteratorTest )
 add_subdirectory( ReduceTest )
 add_subdirectory( ReduceByKeyTest )
 add_subdirectory( ReadFromFileTest )
 add_subdirectory( ScanTest )
 add_subdirectory( ScanByKeyTest )
+add_subdirectory( ScatterTest )
 add_subdirectory( SortTest )
 add_subdirectory( SortByKeyTest )
 add_subdirectory( StableSortTest )
 add_subdirectory( StableSortByKeyTest )
+add_subdirectory( TransformIteratorTest )
 add_subdirectory( TransformTest )
 add_subdirectory( TransformReduceTest )
 add_subdirectory( TransformScanTest )

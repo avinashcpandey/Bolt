@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -24,15 +24,11 @@
 */
 
 
-#if !defined( AMP_SCAN_H )
-#define AMP_SCAN_H
+#if !defined( BOLT_AMP_SCAN_H )
+#define BOLT_AMP_SCAN_H
 #pragma once
 
 #include <bolt/amp/bolt.h>
-
-/*! \file scan.h
-*/
-
 
 namespace bolt
 {
@@ -47,13 +43,14 @@ namespace amp
  *   The sorting Algorithm for sorting the given InputIterator.
  */ 
 
-/*! \addtogroup amp-scan
+/*! \addtogroup AMP-scan
  *   \ingroup PrefixSums
  *   \{
  */
 
 /*! \brief \p inclusive_scan calculates a running sum over a range of values, inclusive of the current value.
  *   The result value at iterator position \p i is the running sum of all values less than \p i in the input range.
+ *   inclusive_scan requires associativity of the binary operation to parallelize the prefix sum.
  *
  * \param ctl A \b Optional Bolt control object, to describe the environment under which the function runs.
  * \param first The first iterator in the input range to be scanned.
@@ -91,6 +88,7 @@ inclusive_scan(
 
 /*! \brief \p inclusive_scan calculates a running sum over a range of values, inclusive of the current value.
  *   The result value at iterator position \p i is the running sum of all values less than \p i in the input range.
+ *   inclusive_scan requires associativity of the binary operation to parallelize the prefix sum.
  *
  * \param ctl A \b Optional Bolt control object, to describe the environment under which the function runs.
  * \param first The first iterator in the input range to be scanned.
@@ -132,6 +130,7 @@ inclusive_scan(
 
 /*! \brief \p exclusive_scan calculates a running sum over a range of values, exclusive of the current value.
  *   The result value at iterator position \p i is the running sum of all values less than \p i in the input range.
+ *   exclusive_scan requires associativity of the binary operation to parallelize it.
  *
  * \param ctl A \b Optional Bolt control object, to describe the environment under which the function runs.
  * \param first The first iterator in the input range to be scanned.
@@ -170,6 +169,7 @@ exclusive_scan(
 
 /*! \brief \p exclusive_scan calculates a running sum over a range of values, exclusive of the current value.
  *   The result value at iterator position \p i is the running sum of all values less than \p i in the input range.
+ *   exclusive_scan requires associativity of the binary operation to parallelize it.
  *
  * \param ctl A \b Optional Bolt control object, to describe the environment under which the function runs.
  * \param first The first iterator in the input range to be scanned.
@@ -213,6 +213,7 @@ exclusive_scan(
 
 /*! \brief \p exclusive_scan calculates a running sum over a range of values, exclusive of the current value.
  *   The result value at iterator position \p i is the running sum of all values less than \p i in the input range.
+ *   exclusive_scan requires associativity of the binary operation to parallelize it.
  *
  * \param ctl A \b Optional Bolt control object, to describe the environment under which the function runs.
  * \param first The first iterator in the input range to be scanned.
@@ -266,4 +267,4 @@ exclusive_scan(
 
 #include <bolt/amp/detail/scan.inl>
 
-#endif // AMP_SCAN_H
+#endif // BOLT_AMP_SCAN_H

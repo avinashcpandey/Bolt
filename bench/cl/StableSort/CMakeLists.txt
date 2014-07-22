@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -20,8 +20,8 @@ set( clBolt.Bench.StableSort.Source
         StableSortBench.cpp )
 
 set( clBolt.Bench.StableSort.Headers stdafx.h 
-        ${BOLT_INCLUDE_DIR}/bolt/cl/StableSort.h 
-        ${BOLT_INCLUDE_DIR}/bolt/cl/detail/StableSort.inl)
+        ${BOLT_INCLUDE_DIR}/bolt/cl/stablesort.h 
+        ${BOLT_INCLUDE_DIR}/bolt/cl/detail/stablesort.inl)
 
 set( clBolt.Bench.StableSort.Files 
         ${clBolt.Bench.StableSort.Source} 

@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -16,8 +16,8 @@
 ############################################################################                                                                                     
 
 # List the names of common files to compile across all platforms
-set( clBolt.Example.Sort.Source sort.cpp myocl.cpp )
-set( clBolt.Example.Sort.Headers ${BOLT_INCLUDE_DIRS}/bolt/cl/sort.h ${BOLT_INCLUDE_DIRS}/bolt/cl/detail/sort.inl )
+set( clBolt.Example.Sort.Source sort.cpp )
+set( clBolt.Example.Sort.Headers ${BOLT_INCLUDE_DIRS}/bolt/cl/sort.h)
 
 set( clBolt.Example.Sort.Files ${clBolt.Example.Sort.Source} ${clBolt.Example.Sort.Headers} )
 

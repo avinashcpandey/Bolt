@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -22,9 +22,9 @@ set( clBolt.Test.Generate.Source ${BOLT_CL_TEST_DIR}/common/stdafx.cpp
 set( clBolt.Test.Generate.Headers ${BOLT_CL_TEST_DIR}/common/stdafx.h 
                                    ${BOLT_CL_TEST_DIR}/common/targetver.h 
                                    ${BOLT_CL_TEST_DIR}/common/myocl.h 
-                                   ${BOLT_INCLUDE_DIR}/bolt/cl/transform.h 
-                                   ${BOLT_INCLUDE_DIR}/bolt/cl/detail/transform.inl
-                                   utils.h 
+                                   ${BOLT_INCLUDE_DIR}/bolt/cl/generate.h 
+                                   ${BOLT_INCLUDE_DIR}/bolt/cl/detail/generate.inl
+                                   ${BOLT_CL_TEST_DIR}/common/utils.h 
                                    )
 
 set( clBolt.Test.Generate.Files ${clBolt.Test.Generate.Source} ${clBolt.Test.Generate.Headers} )

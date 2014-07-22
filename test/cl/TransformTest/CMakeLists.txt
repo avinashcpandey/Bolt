@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -24,7 +24,7 @@ set( clBolt.Test.Transform.Headers ${BOLT_CL_TEST_DIR}/common/stdafx.h
                                    ${BOLT_CL_TEST_DIR}/common/myocl.h 
                                    ${BOLT_INCLUDE_DIR}/bolt/cl/transform.h 
                                    ${BOLT_INCLUDE_DIR}/bolt/cl/detail/transform.inl
-                                   utils.h 
+                                   ${BOLT_CL_TEST_DIR}/common/utils.h 
                                    )
 
 set( clBolt.Test.Transform.Files ${clBolt.Test.Transform.Source} ${clBolt.Test.Transform.Headers} )

@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -15,17 +15,11 @@
 
 ***************************************************************************/
 
+#pragma once
+#if !defined( BOLT_AMP_ITERATOR_TRAITS_H )
+#define BOLT_AMP_ITERATOR_TRAITS_H
 
 /*! \file bolt/amp/iterator/iterator_traits.h
-    \brief Defines new iterator_traits structures used by the Bolt runtime.
-*/
-
-
-#pragma once
-#if !defined( AMP_ITERATOR_TRAITS_H )
-#define AMP_ITERATOR_TRAITS_H
-
-/*! \file iterator_traits.h
     \brief Defines new iterator_traits structures used by the Bolt runtime to make runtime decisions on how to 
     dispatch calls to various supported backends
     \todo This is a minimal version of OpenCL iterator_traits. Needs improvement.
@@ -63,6 +57,10 @@ namespace amp {
         typedef int difference_type;
         typedef const T* pointer;
         typedef const T& reference;
+    };
+
+    struct fancy_iterator_tag : public std::random_access_iterator_tag
+    {
     };
 
 }

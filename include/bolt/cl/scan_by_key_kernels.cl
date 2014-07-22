@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -20,105 +20,120 @@
  *****************************************************************************/
 template<
     typename kType,
+    typename kIterType,
     typename vType,
-    typename oType,
+    typename iIterType,
     typename initType,
     typename BinaryPredicate,
     typename BinaryFunction >
 __kernel void perBlockScanByKey(
     global kType *keys,
+    kIterType    keys_iter, 
     global vType *vals,
-    global oType *output, // input
+    iIterType     vals_iter,
     initType init,
     const uint vecSize,
-    local kType *ldsKeys,
-    local oType *ldsVals,
+    local typename kIterType::value_type *ldsKeys,
+    local typename iIterType::value_type *ldsVals,
     global BinaryPredicate *binaryPred,
     global BinaryFunction *binaryFunct,
-    global kType *keyBuffer,
-    global oType *valBuffer,
+    global typename kIterType::value_type *keyBuffer,
+    global typename iIterType::value_type *valBuffer,
+    global typename iIterType::value_type *valBuffer1,
     int exclusive) // do exclusive scan ?
 {
     size_t gloId = get_global_id( 0 );
     size_t groId = get_group_id( 0 );
     size_t locId = get_local_id( 0 );
     size_t wgSize = get_local_size( 0 );
-    //printf("gid=%i, lTid=%i, gTid=%i\n", groId, locId, gloId);
 
-    //  Abort threads that are passed the end of the input vector
-    if (gloId >= vecSize) return; // on SI this doesn't mess-up barriers
+    wgSize *=2;
+    vals_iter.init( vals );
+    keys_iter.init( keys );
+    size_t offset = 1;
 
-    // if exclusive, load gloId=0 w/ init, and all others shifted-1
-    kType key;
-    oType val;
+   // load input into shared memory
+    
     if (exclusive)
     {
-        if (gloId > 0)
-        { // thread>0
-            key = keys[ gloId-1 ];
-            val = vals[ gloId-1 ];
-            ldsKeys[ locId ] = key;
-            ldsVals[ locId ] = val;
-        }
-        else
-        { // thread=0
-            val = init;
-            ldsVals[ locId ] = val;
-            // key stays null, this thread should never try to compare it's key
-            // nor should any thread compare it's key to ldsKey[ 0 ]
-            // I could put another key into lds just for whatevs
-            // for now ignore this
-        }
+       if (gloId > 0 && groId*wgSize+locId < vecSize)
+	   {
+          typename kIterType::value_type key1 = keys_iter[ groId*wgSize+locId];
+          typename kIterType::value_type key2 = keys_iter[ groId*wgSize+locId-1];
+		  
+          if( (*binaryPred)( key1, key2 )  )
+             ldsVals[locId] = vals_iter[groId*wgSize+locId];
+          else 
+		  {
+		     typename iIterType::value_type start_val = vals_iter[groId*wgSize+locId]; 
+             ldsVals[locId] = (*binaryFunct)(init, start_val);
+          }
+          ldsKeys[locId] = keys_iter[groId*wgSize+locId];
+       }
+       else{ 
+	      typename iIterType::value_type start_val = vals_iter[0];
+          ldsVals[locId] = (*binaryFunct)(init, start_val);
+          ldsKeys[locId] = keys_iter[0];
+       }
+       if(groId*wgSize +locId+ (wgSize/2) < vecSize)
+	   {
+          typename kIterType::value_type key1 = keys_iter[ groId*wgSize +locId+ (wgSize/2)];
+          typename kIterType::value_type key2 = keys_iter[groId*wgSize +locId+ (wgSize/2) -1];
+		 
+          if( (*binaryPred)( key1, key2 )  )
+             ldsVals[locId+(wgSize/2)] = vals_iter[groId*wgSize +locId+ (wgSize/2)];
+          else 
+		  {
+		     typename iIterType::value_type start_val = vals_iter[groId*wgSize +locId+ (wgSize/2)]; 
+             ldsVals[locId+(wgSize/2)] = (*binaryFunct)(init, start_val);
+          } 
+          ldsKeys[locId+(wgSize/2)] = keys_iter[groId*wgSize +locId+ (wgSize/2)];
+       }
+     
     }
     else
     {
-        //vType inVal = vals[gloId];
-        //val = (oType) (*unaryOp)(inVal);
-        key = keys[ gloId ];
-        val = vals[ gloId ];
-        ldsKeys[ locId ] = key;
-        ldsVals[ locId ] = val;
-    }
-
-    // Computes a scan within a workgroup
-    // updates vals in lds but not keys
-    oType sum = val;
-    for( size_t offset = 1; offset < wgSize; offset *= 2 )
-    {
-        barrier( CLK_LOCAL_MEM_FENCE );
-        if (locId >= offset )
-        {
-            kType key2 = ldsKeys[ locId - offset];
-            if( (*binaryPred)( key, key2 )  )
-            {
-                oType y = ldsVals[ locId - offset ];
-                sum = (*binaryFunct)( sum, y );
-            }
-        }
-        barrier( CLK_LOCAL_MEM_FENCE );
-        ldsVals[ locId ] = sum;
+       if(groId*wgSize+locId < vecSize)
+	   {
+           ldsVals[locId] = vals_iter[groId*wgSize+locId];
+           ldsKeys[locId] = keys_iter[groId*wgSize+locId];
+       }
+       if(groId*wgSize +locId+ (wgSize/2) < vecSize)
+	   {
+           ldsVals[locId+(wgSize/2)] = vals_iter[ groId*wgSize +locId+ (wgSize/2)];
+           ldsKeys[locId+(wgSize/2)] = keys_iter[ groId*wgSize +locId+ (wgSize/2)];
+       }
     }
     
-    // Each work item writes out its calculated scan result, relative to the beginning
-    // of each work group
-    kType curkey, prekey;
-    if(exclusive && gloId > 0)
-    {
-       curkey = keys[gloId];
-       prekey = keys[gloId-1];
-       if((*binaryPred)( curkey, prekey  ))
-          output[ gloId ] =  (*binaryFunct)( init, sum ); 
-       else
-          output[ gloId ] = init;
-    }
-    else
-         output[ gloId ] = sum;
 
-    barrier( CLK_LOCAL_MEM_FENCE ); // needed for large data types
+    for (size_t start = wgSize>>1; start > 0; start >>= 1) 
+    {
+       barrier( CLK_LOCAL_MEM_FENCE );
+       if (locId < start)
+       {
+          size_t temp1 = offset*(2*locId+1)-1;
+          size_t temp2 = offset*(2*locId+2)-1;
+       
+          typename kIterType::value_type key = ldsKeys[temp2]; 
+          typename kIterType::value_type key1 = ldsKeys[temp1];
+          if((*binaryPred)( key, key1 )) 
+		  {
+             typename iIterType::value_type y = ldsVals[temp2];
+             typename iIterType::value_type y1 =ldsVals[temp1];
+             ldsVals[temp2] = (*binaryFunct)(y, y1);
+          }
+       }
+       offset *= 2;
+    }
+
+    
+
+    barrier( CLK_LOCAL_MEM_FENCE );
     if (locId == 0)
     {
         keyBuffer[ groId ] = ldsKeys[ wgSize-1 ];
-        valBuffer[ groId ] = ldsVals[ wgSize-1 ];
+        valBuffer[ groId ] = ldsVals[wgSize -1];
+        valBuffer1[ groId ] = ldsVals[wgSize/2 -1];
     }
 }
 
@@ -134,7 +149,6 @@ template<
 __kernel void intraBlockInclusiveScanByKey(
     global kType *keySumArray,
     global oType *preSumArray,
-    global oType *postSumArray,
     const uint vecSize,
     local kType *ldsKeys,
     local oType *ldsVals,
@@ -160,7 +174,6 @@ __kernel void intraBlockInclusiveScanByKey(
         offset = 0;
         key = keySumArray[ mapId+offset ];
         workSum = preSumArray[ mapId+offset ];
-        postSumArray[ mapId+offset ] = workSum;
 
         //  Serial accumulation
         for( offset = offset+1; offset < workPerThread; offset += 1 )
@@ -178,42 +191,18 @@ __kernel void intraBlockInclusiveScanByKey(
                 {
                     workSum = y;
                 }
-                postSumArray[ mapId+offset ] = workSum;
+                preSumArray[ mapId+offset ] = workSum;
             }
         }
     }
     barrier( CLK_LOCAL_MEM_FENCE );
-    oType scanSum;
+    oType scanSum = workSum;
     offset = 1;
     // load LDS with register sums
-    if (mapId < vecSize)
-    {
-        ldsVals[ locId ] = workSum;
-        ldsKeys[ locId ] = key;
-        barrier( CLK_LOCAL_MEM_FENCE );
-    
-        if (locId >= offset )
-        {   // thread > 0
-            kType key1 = ldsKeys[ locId ];
-            kType key2 = ldsKeys[ locId-offset ];
-
-            oType y1 = ldsVals[ locId ];
-            if ( (*binaryPred)( key1, key2 ) )
-            {
-                oType y2 = ldsVals[ locId-offset ];
-                scanSum = (*binaryFunct)( y1, y2 );
-            }
-            else
-            {
-                scanSum = y1;
-            }
-            ldsVals[ locId ] = scanSum;
-        } else { // thread 0
-            scanSum = workSum;
-        }  
-    }
+    ldsVals[ locId ] = workSum;
+    ldsKeys[ locId ] = key;
     // scan in lds
-    for( offset = offset*2; offset < wgSize; offset *= 2 )
+    for( offset = offset*1; offset < wgSize; offset *= 2 )
     {
         barrier( CLK_LOCAL_MEM_FENCE );
         if (mapId < vecSize)
@@ -227,9 +216,13 @@ __kernel void intraBlockInclusiveScanByKey(
                 {
                     scanSum = (*binaryFunct)( scanSum, y );
                 }
-                ldsVals[ locId ] = scanSum;
+                else
+                    scanSum = ldsVals[ locId ];
             }
+      
         }
+        barrier( CLK_LOCAL_MEM_FENCE );
+        ldsVals[ locId ] = scanSum;
     } // for offset
     barrier( CLK_LOCAL_MEM_FENCE );
     
@@ -240,7 +233,7 @@ __kernel void intraBlockInclusiveScanByKey(
 
         if (mapId < vecSize && locId > 0)
         {
-            oType y = postSumArray[ mapId+offset ];
+            oType y = preSumArray[ mapId+offset ];
             kType key1 = keySumArray[ mapId+offset ]; // change me
             kType key2 = ldsKeys[ locId-1 ];
             if ( (*binaryPred)( key1, key2 ) )
@@ -248,7 +241,7 @@ __kernel void intraBlockInclusiveScanByKey(
                 oType y2 = ldsVals[locId-1];
                 y = (*binaryFunct)( y, y2 );
             }
-            postSumArray[ mapId+offset ] = y;
+            preSumArray[ mapId+offset ] = y;
         } // thread in bounds
     } // for 
 } // end kernel
@@ -259,35 +252,143 @@ __kernel void intraBlockInclusiveScanByKey(
  *****************************************************************************/
 template<
     typename kType,
+    typename kIterType,
+    typename vType,
+    typename iIterType,
     typename oType,
+    typename oIterType,
+    typename initType,
     typename BinaryPredicate,
     typename BinaryFunction >
 __kernel void perBlockAdditionByKey(
-    global kType *keySumArray,
-    global oType *postSumArray,
+    global typename iIterType::value_type *preSumArray,
+    global typename iIterType::value_type *preSumArray1,
     global kType *keys,
-    global oType *output,
+    kIterType    keys_iter, 
+    global vType *vals,
+    iIterType     vals_iter,
+    global oType *output, // input
+    oIterType     output_iter,
+    local typename kIterType::value_type   *ldsKeys,
+    local typename iIterType::value_type   *ldsVals,
     const uint vecSize,
     global BinaryPredicate *binaryPred,
-    global BinaryFunction *binaryFunct)
+    global BinaryFunction *binaryFunct,
+    int exclusive,
+    initType init)
 {
     size_t gloId = get_global_id( 0 );
     size_t groId = get_group_id( 0 );
     size_t locId = get_local_id( 0 );
+    size_t wgSize = get_local_size( 0 );
 
-    //  Abort threads that are passed the end of the input vector
-    if( gloId >= vecSize )
-        return;
-        
-    oType scanResult = output[ gloId ];
+    output_iter.init( output);
+    vals_iter.init( vals );
+    keys_iter.init( keys );
+    // if exclusive, load gloId=0 w/ init, and all others shifted-1
+    typename kIterType::value_type key;
+    typename iIterType::value_type val;
+    if (gloId < vecSize){
+       if (exclusive)
+       {
+          if (gloId > 0)
+          { // thread>0
+              key = keys_iter[ gloId];
+              typename kIterType::value_type key1 = keys_iter[ gloId];
+              typename kIterType::value_type key2 = keys_iter[ gloId-1];
+              if( (*binaryPred)( key1, key2 )  )
+                  val = vals_iter[ gloId-1 ];
+              else 
+                  val = init;
+              ldsKeys[ locId ] = key;
+              ldsVals[ locId ] = val;
+          }
+          else
+          { // thread=0
+              val = init;
+              ldsVals[ locId ] = val;
+              ldsKeys[ locId ] = keys_iter[gloId];
+            // key stays null, this thread should never try to compare it's key
+            // nor should any thread compare it's key to ldsKey[ 0 ]
+            // I could put another key into lds just for whatevs
+            // for now ignore this
+          }
+       }
+       else
+       {
+          //vType inVal = vals[gloId];
+          //val = (oType) (*unaryOp)(inVal);
+          key = keys_iter[ gloId ];
+          val = vals_iter[ gloId ];
+          ldsKeys[ locId ] = key;
+          ldsVals[ locId ] = val;
+       }
+     }
+	 // Each work item writes out its calculated scan result, relative to the beginning
+    // of each work group
+    typename iIterType::value_type scanResult = ldsVals[ locId ];
 
-    // accumulate prefix
-    kType key1 = keySumArray[ groId-1 ];
-    kType key2 = keys[ gloId ];
-    if (groId > 0 && (*binaryPred)( key1, key2 ) )
+    typename iIterType::value_type postBlockSum, newResult;
+    typename iIterType::value_type y, y1, sum;
+    typename kIterType::value_type key1, key2, key3, key4;
+    if(locId == 0 && gloId < vecSize)
     {
-        oType postBlockSum = postSumArray[ groId-1 ];
-        oType newResult = (*binaryFunct)( scanResult, postBlockSum );
-        output[ gloId ] = newResult;
+        if(groId > 0) {
+           key1 = keys_iter[gloId];
+           key2 = keys_iter[groId*wgSize -1 ];
+           if(groId % 2 == 0)
+              postBlockSum = preSumArray[ groId/2 -1 ];
+           else if(groId == 1)
+              postBlockSum = preSumArray1[0];
+           else {
+              key3 = keys_iter[groId*wgSize -1];
+              key4 = keys_iter[(groId-1)*wgSize -1];
+              if((*binaryPred)(key3 ,key4)){
+                 y = preSumArray[ groId/2 -1 ];
+                 y1 = preSumArray1[groId/2];
+                 postBlockSum = (*binaryFunct)(y, y1);
+              }
+              else
+                 postBlockSum = preSumArray1[groId/2];
+           }
+           if (!exclusive)
+	          if((*binaryPred)( key1, key2))
+                 newResult = (*binaryFunct)( scanResult, postBlockSum );
+              else
+		         newResult = scanResult;
+	       else
+	          if((*binaryPred)( key1, key2)) 
+		         newResult = postBlockSum;
+              else
+		         newResult = init;  
+        }
+        else {
+             newResult = scanResult;
+        }
+	    ldsVals[ locId ] = newResult;
     }
+    // Computes a scan within a workgroup
+    // updates vals in lds but not keys
+    sum = ldsVals[ locId ];
+    for( size_t offset = 1; offset < wgSize; offset *= 2 )
+    {
+        barrier( CLK_LOCAL_MEM_FENCE );
+        if (locId >= offset )
+        {
+            typename kIterType::value_type key2 = ldsKeys[ locId - offset];
+            if( (*binaryPred)( key, key2 )  )
+            {
+                typename iIterType::value_type y = ldsVals[ locId - offset];
+                sum = (*binaryFunct)( sum, y );
+            }
+        }
+        barrier( CLK_LOCAL_MEM_FENCE );
+        ldsVals[ locId ] = sum;
+    }
+    barrier( CLK_LOCAL_MEM_FENCE ); // needed for large data types
+    //  Abort threads that are passed the end of the input vector
+    if (gloId >= vecSize) return; 
+
+    output_iter[ gloId ] = sum;
+    
 }

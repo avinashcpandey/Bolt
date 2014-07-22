@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -17,7 +17,7 @@
 
 # List the names of common files to compile across all platforms
 
-set( clBolt.Test.MaxElement.Source MaxElementTest.cpp MaxElementDeviceVector.cpp ${BOLT_CL_TEST_DIR}/common/myocl.cpp) 
+set( clBolt.Test.MaxElement.Source MaxElementTest.cpp  ${BOLT_CL_TEST_DIR}/common/myocl.cpp) 
 set( clBolt.Test.MaxElement.Headers ${BOLT_CL_TEST_DIR}/common/myocl.h ${BOLT_INCLUDE_DIR}/bolt/cl/max_element.h ${BOLT_INCLUDE_DIR}/bolt/cl/detail/min_element.inl)
 
 set( clBolt.Test.MaxElement.Files ${clBolt.Test.MaxElement.Source} ${clBolt.Test.MaxElement.Headers} )

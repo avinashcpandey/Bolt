@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -29,19 +29,28 @@ if(BUILD_TBB)
 endif()
 
 if( BUILD_clBolt )
+
+if( MSVC_IDE )
     # Include standard OpenCL headers
-    add_subdirectory( Benchmark )
-    add_subdirectory( CopyBench )
-    add_subdirectory( CopyBuffer )
-    add_subdirectory( Fill ) 
-    add_subdirectory( Generate )
-    add_subdirectory( InnerProduct )
-    add_subdirectory( Reduce )
-    add_subdirectory( Scan )
-    add_subdirectory( ScanByKeyBench )
-    add_subdirectory( Sort )
-    add_subdirectory( StableSort )
-    add_subdirectory( StableSortByKey )
-    add_subdirectory( Transform )
-    add_subdirectory( TransformScanBench )
+    #add_subdirectory( Benchmark )
+    # add_subdirectory( CopyBench )
+    # add_subdirectory( CopyBuffer )
+    # add_subdirectory( Fill ) 
+    # add_subdirectory( Generate )
+    # add_subdirectory( InnerProduct )
+    # add_subdirectory( Reduce )
+    # add_subdirectory( Scan )
+    # add_subdirectory( ScanByKeyBench )
+    # add_subdirectory( Sort )
+    # add_subdirectory( StableSort )
+    # add_subdirectory( StableSortByKey )
+    # add_subdirectory( Transform )
+    # add_subdirectory( TransformScanBench )
+    # add_subdirectory( Gather )
+    # add_subdirectory( Scatter )
+else()
+    # Include standard OpenCL headers
+    #add_subdirectory( Benchmark )
+endif()
+
 endif( )

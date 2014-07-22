@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -19,40 +19,39 @@
 
 #define _REDUCE_STEP(_LENGTH, _IDX, _W) \
     if ((_IDX < _W) && ((_IDX + _W) < _LENGTH)) {\
-      iTypePtr mine = scratch[_IDX];\
-      iTypePtr other = scratch[_IDX + _W];\
+      T mine = scratch[_IDX];\
+      T other = scratch[_IDX + _W];\
       scratch[_IDX] = (*userFunctor)(mine, other); \
     }\
     barrier(CLK_LOCAL_MEM_FENCE);
 
-template< typename iTypePtr, typename iTypeIter, typename binary_function >
+template< typename iTypePtr, typename iTypeIter, typename binary_function,typename T >
 kernel void reduceTemplate(
     global iTypePtr*    input_ptr, 
     iTypeIter input_iter,
     const int length,
     global binary_function* userFunctor,
-    global iTypePtr*    result,
-    local iTypePtr*     scratch
+    global T*    result,
+    local T*     scratch
 )
 {
     int gx = get_global_id (0);
-
-    //  Abort threads that are passed the end of the input vector
-    if( gx >= length )
-        return;
-
+    int gloId = gx;
     input_iter.init( input_ptr );
 
     //  Initialize the accumulator private variable with data from the input array
     //  This essentially unrolls the loop below at least once
-    iTypePtr accumulator = input_iter[gx];
-    gx += get_global_size(0);
+    T accumulator;
+    if(gloId < length){
+       accumulator = (T) input_iter[gx];
+       gx += get_global_size(0);
+    }
 
     // Loop sequentially over chunks of input vector, reducing an arbitrary size input
     // length into a length related to the number of workgroups
     while (gx < length)
     {
-        iTypePtr element = input_iter[gx];
+        typename iTypeIter::value_type element = input_iter[gx];
         accumulator = (*userFunctor)(accumulator, element);
         gx += get_global_size(0);
     }
@@ -66,7 +65,9 @@ kernel void reduceTemplate(
     uint tail = length - (get_group_id(0) * get_local_size(0));
 
     // Parallel reduction within a given workgroup using local data store
-    // to share values between workitems
+    // to share values between workitems - 256 is good to achieve high occupancy
+    _REDUCE_STEP(tail, local_index, 128);
+    _REDUCE_STEP(tail, local_index, 64);
     _REDUCE_STEP(tail, local_index, 32);
     _REDUCE_STEP(tail, local_index, 16);
     _REDUCE_STEP(tail, local_index,  8);
@@ -74,6 +75,10 @@ kernel void reduceTemplate(
     _REDUCE_STEP(tail, local_index,  2);
     _REDUCE_STEP(tail, local_index,  1);
  
+     //  Abort threads that are passed the end of the input vector
+    if( gloId >= length )
+        return;
+
     //  Write only the single reduced value for the entire workgroup
     if (local_index == 0) {
         result[get_group_id(0)] = scratch[0];

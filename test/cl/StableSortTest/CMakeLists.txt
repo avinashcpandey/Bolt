@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -23,8 +23,8 @@ set( clBolt.Test.StableSort.Source
 
 set( clBolt.Test.StableSort.Headers   
         ${BOLT_CL_TEST_DIR}/common/myocl.h
-        ${BOLT_INCLUDE_DIR}/bolt/cl/StableSort.h
-        ${BOLT_INCLUDE_DIR}/bolt/cl/detail/StableSort.inl )
+        ${BOLT_INCLUDE_DIR}/bolt/cl/stablesort.h
+        ${BOLT_INCLUDE_DIR}/bolt/cl/detail/stablesort.inl )
 
 set( clBolt.Test.StableSort.Files 
         ${clBolt.Test.StableSort.Source} 
@@ -34,10 +34,10 @@ set( clBolt.Test.StableSort.Files
 include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 # Set project specific compile and link options
-# if( MSVC )
-    # set( CMAKE_CXX_FLAGS "-bigobj ${CMAKE_CXX_FLAGS}" )
-    # set( CMAKE_C_FLAGS "-bigobj ${CMAKE_C_FLAGS}" )
-# endif()
+if( MSVC )
+    set( CMAKE_CXX_FLAGS "-bigobj ${CMAKE_CXX_FLAGS}" )
+    set( CMAKE_C_FLAGS "-bigobj ${CMAKE_C_FLAGS}" )
+endif()
 
 add_executable( clBolt.Test.StableSort ${clBolt.Test.StableSort.Files} )
 target_link_libraries( clBolt.Test.StableSort ${OPENCL_LIBRARIES} ${GTEST_LIBRARIES} ${Boost_LIBRARIES} ${TBB_LIBRARIES} 

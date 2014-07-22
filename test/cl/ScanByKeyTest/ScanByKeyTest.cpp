@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -25,6 +25,9 @@
 #include "bolt/unicode.h"
 #include "bolt/miniDump.h"
 
+#define TEST_DOUBLE 1
+#define SERIAL_TBB_OFFSET 1
+
 #include <gtest/gtest.h>
 //#include <boost/shared_array.hpp>
 #include <boost/program_options.hpp>
@@ -40,6 +43,8 @@
 /******************************************************************************
  *  Double x4
  *****************************************************************************/
+
+#if (TEST_DOUBLE == 1)
 BOLT_FUNCTOR(uddtD4,
 struct uddtD4
 {
@@ -104,9 +109,16 @@ struct MultD4
     };
 }; 
 );
+
+BOLT_CREATE_TYPENAME( bolt::cl::device_vector< uddtD4 >::iterator );
+BOLT_CREATE_CLCODE( bolt::cl::device_vector< uddtD4 >::iterator, bolt::cl::deviceVectorIteratorTemplate );
+
+
+
 uddtD4 identityMultD4 = { 1.0, 1.0, 1.0, 1.0 };
 uddtD4 initialMultD4  = { 1.00001, 1.000003, 1.0000005, 1.00000007 };
 
+#endif
 
 /******************************************************************************
  *  Integer x2
@@ -152,6 +164,12 @@ struct AddI2
     };
 }; 
 );
+
+BOLT_CREATE_TYPENAME( bolt::cl::device_vector< uddtI2 >::iterator );
+BOLT_CREATE_CLCODE( bolt::cl::device_vector< uddtI2 >::iterator, bolt::cl::deviceVectorIteratorTemplate );
+
+
+
 uddtI2 identityAddI2 = {  0, 0 };
 uddtI2 initialAddI2  = { -1, 2 };
 
@@ -159,6 +177,8 @@ uddtI2 initialAddI2  = { -1, 2 };
 /******************************************************************************
  *  Mixed float and int
  *****************************************************************************/
+#if (TEST_DOUBLE == 1)
+
 BOLT_FUNCTOR(uddtM3,
 struct uddtM3
 {
@@ -214,8 +234,14 @@ struct MixM3
     };
 }; 
 );
+BOLT_CREATE_TYPENAME( bolt::cl::device_vector< uddtM3 >::iterator );
+BOLT_CREATE_CLCODE( bolt::cl::device_vector< uddtM3 >::iterator, bolt::cl::deviceVectorIteratorTemplate );
+
+
+
 uddtM3 identityMixM3 = { 0, 0, 1.0 };
 uddtM3 initialMixM3  = { 2, 1, 1.000001 };
+#endif
 
 BOLT_FUNCTOR(uddtM2,
 struct uddtM2
@@ -226,7 +252,7 @@ struct uddtM2
     bool operator==(const uddtM2& rhs) const
     {
         bool equal = true;
-        float ths = 0.00001; // thresh hold single(float)
+        float ths = 0.00001f; // thresh hold single(float)
         equal = ( a == rhs.a ) ? equal : false;
         if (rhs.b < ths && rhs.b > -ths)
             equal = ( (1.0*b - rhs.b) < ths && (1.0*b - rhs.b) > -ths) ? equal : false;
@@ -269,6 +295,9 @@ struct MixM2
 }; 
 );
 
+BOLT_CREATE_TYPENAME( bolt::cl::device_vector< uddtM2 >::iterator );
+BOLT_CREATE_CLCODE( bolt::cl::device_vector< uddtM2 >::iterator, bolt::cl::deviceVectorIteratorTemplate );
+
 
 uddtM2 identityMixM2 = { 0, 3.141596f };
 uddtM2 initialMixM2  = { 2, 1.000001f };
@@ -306,13 +335,17 @@ gold_scan_by_key(
     OutputIterator result,
     BinaryFunction binary_op)
 {
-    typedef std::iterator_traits< InputIterator1 >::value_type kType;
-    typedef std::iterator_traits< InputIterator2 >::value_type vType;
-    typedef std::iterator_traits< OutputIterator >::value_type oType;
+    if(std::distance(firstKey,lastKey) < 1)
+         return result;
+    typedef typename std::iterator_traits< InputIterator1 >::value_type kType;
+    typedef typename std::iterator_traits< InputIterator2 >::value_type vType;
+    typedef typename std::iterator_traits< OutputIterator >::value_type oType;
 
     static_assert( std::is_convertible< vType, oType >::value,
         "InputIterator2 and OutputIterator's value types are not convertible." );
 
+    if(std::distance(firstKey,lastKey) < 1)
+         return result;
     // do zeroeth element
     *result = *values; // assign value
 
@@ -363,43 +396,41 @@ gold_scan_by_key_exclusive(
     BinaryFunction binary_op,
     T init)
 {
-    typedef std::iterator_traits< InputIterator1 >::value_type kType;
-    typedef std::iterator_traits< InputIterator2 >::value_type vType;
-    typedef std::iterator_traits< OutputIterator >::value_type oType;
-
+    if(std::distance(firstKey,lastKey) < 1)
+         return result;
+    typedef typename std::iterator_traits< InputIterator1 >::value_type kType;
+    typedef typename std::iterator_traits< InputIterator2 >::value_type vType;
+    typedef typename std::iterator_traits< OutputIterator >::value_type oType;
     static_assert( std::is_convertible< vType, oType >::value,
         "InputIterator2 and OutputIterator's value types are not convertible." );
-
     // do zeroeth element
     //*result = *values; // assign value
+    oType temp = *values;
     *result = (vType)init;
-
-
     // scan oneth element and beyond
     for ( InputIterator1 key = (firstKey+1); key != lastKey; key++)
     {
         // move on to next element
         values++;
         result++;
-
         // load keys
         kType currentKey  = *(key);
         kType previousKey = *(key-1);
-
         // load value
-        oType currentValue = *values; // convertible
+        oType currentValue = temp; // convertible
         oType previousValue = *(result-1);
-
         // within segment
         if (currentKey == previousKey)
         {
-            //std::cout << "continuing segment" << std::endl;
+            temp = *values;
             oType r = binary_op( previousValue, currentValue);
             *result = r;
+            
         }
         else // new segment
         {
            // std::cout << "new segment" << std::endl;
+             temp = *values;
             *result = (vType)init;
         }
     }
@@ -408,6 +439,2212 @@ gold_scan_by_key_exclusive(
 }
 
 
+class scanByKeyStdVectorWithIters:public ::testing::TestWithParam<int>
+{
+protected:
+    int myStdVectSize;
+public:
+    scanByKeyStdVectorWithIters():myStdVectSize(GetParam()){
+    }
+};
+
+typedef scanByKeyStdVectorWithIters ScanByKeyOffsetTest;
+typedef scanByKeyStdVectorWithIters ScanByKeyCLtypeTest;
+/*
+class StdVectCountingIterator :public ::testing::TestWithParam<int>{
+protected:
+    int mySize;
+public:
+    StdVectCountingIterator():mySize(GetParam()){
+    }
+};*/
+
+TEST_P (ScanByKeyCLtypeTest, InclTestLong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+   
+
+    // input and output vectors for device and reference
+
+    //bolt::cl::device_vector< cl_long > output( myStdVectSize, 0 );
+    std::vector< cl_long > refInput( myStdVectSize);
+    //std::vector< cl_long > refOutput( myStdVectSize , 0);
+
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+         
+} 
+TEST_P (ScanByKeyCLtypeTest, SerialInclTestLong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_long > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+  
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+          
+} 
+TEST_P (ScanByKeyCLtypeTest, MulticoreInclTestLong)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_long > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+     
+} 
+ 
+TEST_P (ScanByKeyCLtypeTest, InclTestULong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ulong > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+         
+} 
+
+TEST_P (ScanByKeyCLtypeTest, MulticoreInclTestULong)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_ulong > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+     
+} 
+
+TEST_P (ScanByKeyCLtypeTest, ExclTestLong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_long > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+    
+	bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+
+    // compare results
+    cmpArrays(refInput, input);
+         
+} 
+TEST_P (ScanByKeyCLtypeTest, SerialExclTestLong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_long > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(),  refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+          
+} 
+TEST_P (ScanByKeyCLtypeTest, MulticoreExclTestLong)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_long > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(),  refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+          
+     
+} 
+ 
+TEST_P (ScanByKeyCLtypeTest, ExclTestULong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ulong > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+         
+} 
+TEST_P (ScanByKeyCLtypeTest, SerialExclTestULong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ulong > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+          
+} 
+TEST_P (ScanByKeyCLtypeTest, MulticoreExclTestULong)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_ulong > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+     
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST_P (ScanByKeyCLtypeTest, InclTestShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+         
+} 
+TEST_P (ScanByKeyCLtypeTest, SerialInclTestShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+          
+} 
+TEST_P (ScanByKeyCLtypeTest, MulticoreInclTestShort)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+     
+} 
+ 
+TEST_P (ScanByKeyCLtypeTest, InclTestUShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ushort > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+     
+         
+} 
+
+TEST_P (ScanByKeyCLtypeTest, MulticoreInclTestUShort)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_ushort > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+     
+} 
+
+TEST_P (ScanByKeyCLtypeTest, ExclTestShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+         
+} 
+TEST_P (ScanByKeyCLtypeTest, SerialExclTestShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+         
+          
+} 
+TEST_P (ScanByKeyCLtypeTest, MulticoreExclTestShort)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+     
+} 
+ 
+TEST_P (ScanByKeyCLtypeTest, ExclTestUShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ushort > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+         
+} 
+TEST_P (ScanByKeyCLtypeTest, SerialExclTestUShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ushort > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+    
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+TEST_P (ScanByKeyCLtypeTest, MulticoreExclTestUShort)
+{ 
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ushort > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+     
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+     
+} 
+
+
+
+TEST_P (ScanByKeyOffsetTest, InclOffsetTestInt)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< int > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< int> input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<int> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+#if (SERIAL_TBB_OFFSET == 1)
+TEST_P (ScanByKeyOffsetTest, SerialInclOffsetTestInt)
+{        
+    std::vector< int > keys( myStdVectSize, 1);
+
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+
+    std::vector< int > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< int > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<int> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, MulticoreInclOffsetTestInt)
+{          
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< int > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< int > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<int> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+
+TEST_P (ScanByKeyOffsetTest, SerialExclOffsetTestInt)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< int > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< int > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<int> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0] ,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, MulticoreExclOffsetTestInt)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< int > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< int > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<int> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	 bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, SerialInclOffsetTestFloat)
+{        
+    std::vector< float > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    float key = 1.f;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< float > device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<float> eq; 
+    bolt::cl::plus<float> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, MulticoreInclOffsetTestFloat)
+{          
+    std::vector< float > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    float key = 1.f;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< float > device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<float> eq; 
+    bolt::cl::plus<float> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, SerialExclOffsetTestFloat)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< float > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    float key = 1.f;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< float > device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<float> eq; 
+    bolt::cl::plus<float> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2.f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2.f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, MulticoreExclOffsetTestFloat)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< float > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    float key = 1.f;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< float > device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<float> eq; 
+    bolt::cl::plus<float> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2.f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2.f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+}
+#endif
+
+TEST_P (ScanByKeyOffsetTest, ExclOffsetTestInt)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< int > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< int > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<int> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4),  refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, InclOffsetTestFloat)
+{
+    std::vector< float > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    float key = 1.f;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector< float > device_keys( keys.begin(), keys.end());
+
+    std::vector< float > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<float> eq; 
+    bolt::cl::plus<float> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, ExclOffsetTestFloat)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< float > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    float key = 1.f;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< float > device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<float> eq; 
+    bolt::cl::plus<float> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2.f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2.f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+#if (SERIAL_TBB_OFFSET == 1)
+
+TEST_P (ScanByKeyOffsetTest, SerialInclOffsetTestDouble)
+{        
+    std::vector< double > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    double key = 1.0;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< double  > device_keys( keys.begin(), keys.end());
+    
+	std::vector< double > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.0 + rand()%3;
+	bolt::cl::device_vector< double > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<double> eq; 
+    bolt::cl::plus<double> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, MulticoreInclOffsetTestDouble)
+{          
+    std::vector< double > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    double key = 1.0;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< double  > device_keys( keys.begin(), keys.end());
+    
+	std::vector< double > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.0 + rand()%3;
+	bolt::cl::device_vector< double > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<double> eq; 
+    bolt::cl::plus<double> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+TEST_P (ScanByKeyOffsetTest, SerialExclOffsetTestDouble)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< double > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    double key = 1.0;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< double > device_keys( keys.begin(), keys.end());
+    
+	std::vector< double > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.0 + rand()%3;
+	bolt::cl::device_vector< double > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<double> eq; 
+    bolt::cl::plus<double> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+TEST_P (ScanByKeyOffsetTest, MulticoreExclOffsetTestDouble)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< double > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    double key = 1.0;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector<double > device_keys( keys.begin(), keys.end());
+    
+	std::vector< double > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.0 + rand()%3;
+	bolt::cl::device_vector< double > input( refInput.begin(), refInput.end() );
+
+
+    // call scan
+    bolt::cl::equal_to<double> eq; 
+    bolt::cl::plus<double> mM3; 
+    
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+}
+#endif
+#if(TEST_DOUBLE == 1)
+TEST_P (ScanByKeyOffsetTest, InclOffsetTestDouble)
+{
+    std::vector< double > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    double key = 1.0;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector<double > device_keys( keys.begin(), keys.end());
+     
+    std::vector< double > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.0 + rand()%3;
+	bolt::cl::device_vector< double > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<double> eq; 
+    bolt::cl::plus<double> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+TEST_P (ScanByKeyOffsetTest, ExclOffsetTestDouble)
+{
+    //bolt::cl::device_vector< float > input( myStdVectSize, 2.f);
+    //std::vector< float > refInput( myStdVectSize, 2.f);
+              
+    std::vector< double > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    double key = 1.0;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<double > device_keys( keys.begin(), keys.end());
+      
+	std::vector< double > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1.0 + rand()%3;
+	bolt::cl::device_vector< double > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<double> eq; 
+    bolt::cl::plus<double> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+}
+
+#endif
+
+TEST_P (ScanByKeyOffsetTest, InclOffsetTestLong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+      
+    
+	std::vector< cl_long > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+
+TEST_P (ScanByKeyOffsetTest, InclOffsetTestULong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+      
+    std::vector< cl_ulong > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+TEST_P (ScanByKeyOffsetTest, InclOffsetTestShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+
+TEST_P (ScanByKeyOffsetTest, InclOffsetTestUShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ushort > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+    
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), eq, mM3);
+    //gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), eq, mM3);
+    gold_scan_by_key(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+
+TEST_P (ScanByKeyOffsetTest, ExclOffsetTestLong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_long > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+TEST_P (ScanByKeyOffsetTest, ExclInclOffsetTestULong)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_ulong > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+
+TEST_P (ScanByKeyOffsetTest, ExclOffsetTestShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+TEST_P (ScanByKeyOffsetTest, ExclOffsetTestUShort)
+{
+    std::vector< int > keys( myStdVectSize, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < myStdVectSize; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+
+	std::vector< cl_ushort > refInput( myStdVectSize);
+	for(int i=0; i<myStdVectSize; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), output.begin() + (myStdVectSize/4), 2, eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refOutput.begin() + (myStdVectSize/4), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() + (myStdVectSize/4), device_keys.end() - (myStdVectSize/4), input.begin() + (myStdVectSize/4), input.begin() + (myStdVectSize/4), refInput[0], eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin() + (myStdVectSize/4), keys.end() - (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), refInput.begin() + (myStdVectSize/4), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+
+} 
+
+INSTANTIATE_TEST_CASE_P(incl_excl_ScanByKeyIterIntLimit, ScanByKeyCLtypeTest, ::testing::Range( 1, 4096, 54 ) ); //   1 to 2^12
+INSTANTIATE_TEST_CASE_P(incl_excl_ScanByKeyIterIntLimit, ScanByKeyOffsetTest, ::testing::Range(4096, 65536, 555 ) ); //2^12 to 2^16
+
+
+#if (TEST_DOUBLE == 1)
 
 TEST(InclusiveScanByKey, IncMixedM3increment)
 {
@@ -434,15 +2671,19 @@ TEST(InclusiveScanByKey, IncMixedM3increment)
 
     // input and output vectors for device and reference
     std::vector< uddtM3 > input(  length, initialMixM3 );
-    std::vector< uddtM3 > output( length, identityMixM3 );
+    //std::vector< uddtM3 > output( length, identityMixM3 );
     std::vector< uddtM3 > refInput( length, initialMixM3 );
-    std::vector< uddtM3 > refOutput( length );
+    //std::vector< uddtM3 > refOutput( length );
 
     // call scan
     MixM3 mM3;
     uddtM2_equal_to eq;
-    bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+   /* bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);*/
+
+	bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+
 
 #if 0
     // print Bolt scan_by_key
@@ -452,19 +2693,21 @@ TEST(InclusiveScanByKey, IncMixedM3increment)
         std::cout << "BOLT: i=" << i << ", ";
         std::cout << "key={" << keys[i].a << ", " << keys[i].b << "}; ";
         std::cout << "val={" << input[i].a << ", " << input[i].b << ", " << input[i].c << "}; ";
-        std::cout << "out={" << output[i].a << ", " << output[i].b << ", " << output[i].c << "};" << std::endl;
+        //std::cout << "out={" << output[i].a << ", " << output[i].b << ", " << output[i].c << "};" << std::endl;
     
         std::cout << "GOLD: i=" << i << ", ";
         std::cout << "key={" << keys[i].a << ", " << keys[i].b << "}; ";
         std::cout << "val={" << refInput[i].a << ", " << refInput[i].b << ", " << refInput[i].c << "}; ";
-        std::cout << "out={" << refOutput[i].a << ", " << refOutput[i].b << ", " << refOutput[i].c << "};" << std::endl;
+        //std::cout << "out={" << refOutput[i].a << ", " << refOutput[i].b << ", " << refOutput[i].c << "};" <<std::endl;
         }
     }
 #endif
 
     // compare results
-    cmpArrays(refOutput, output);
+    //cmpArrays(refOutput, output);
+	cmpArrays(refInput, input);
 }
+
 
 TEST(InclusiveScanByKey, IncMixedM3same)
 {
@@ -475,15 +2718,18 @@ TEST(InclusiveScanByKey, IncMixedM3same)
 
     // input and output vectors for device and reference
     std::vector< uddtM3 > input(  length, initialMixM3 );
-    std::vector< uddtM3 > output( length, identityMixM3 );
+    //std::vector< uddtM3 > output( length, identityMixM3 );
     std::vector< uddtM3 > refInput( length, initialMixM3 );
-    std::vector< uddtM3 > refOutput( length );
+    //std::vector< uddtM3 > refOutput( length );
 
     // call scan
     MixM3 mM3;
     uddtM2_equal_to eq;
-    bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+   /* bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);*/
+
+	 bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
 
 #if 0
     std::cout.setf(std::ios_base::scientific);
@@ -497,21 +2743,22 @@ TEST(InclusiveScanByKey, IncMixedM3same)
         std::cout << "key={" << keys[i].a << ", " << keys[i].b << "}; ";
         std::cout << "val={" << input[i].a << ", " << input[i].b << ", " << input[i].c << "}; ";
         std::cout.precision(15);
-        std::cout << "out={" << output[i].a << ", " << output[i].b << ", " << output[i].c << "};" << std::endl;
+        //std::cout << "out={" << output[i].a << ", " << output[i].b << ", " << output[i].c << "};" << std::endl;
     
         std::cout << "GOLD: i=" << i << ", ";
         std::cout.precision(3);
         std::cout << "key={" << keys[i].a << ", " << keys[i].b << "}; ";
         std::cout << "val={" << refInput[i].a << ", " << refInput[i].b << ", " << refInput[i].c << "}; ";
         std::cout.precision(15);
-        std::cout << "out={" << refOutput[i].a << ", " << refOutput[i].b << ", " << refOutput[i].c << "};" << std::endl;
+       // std::cout << "out={" << refOutput[i].a << ", " << refOutput[i].b << ", " << refOutput[i].c << "};" <<std::endl;
         }
     }
 #endif
 
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
+
 
 TEST(InclusiveScanByKey, IncMixedM3each)
 {
@@ -530,15 +2777,18 @@ TEST(InclusiveScanByKey, IncMixedM3each)
 
     // input and output vectors for device and reference
     std::vector< uddtM3 > input(  length, initialMixM3 );
-    std::vector< uddtM3 > output( length, identityMixM3 );
+    //std::vector< uddtM3 > output( length, identityMixM3 );
     std::vector< uddtM3 > refInput( length, initialMixM3 );
-    std::vector< uddtM3 > refOutput( length );
+    //std::vector< uddtM3 > refOutput( length );
 
     // call scan
     MixM3 mM3;
     uddtM2_equal_to eq;
-    bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    /*bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);*/
+
+	bolt::cl::inclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
 
 #if 0
     // print Bolt scan_by_key
@@ -548,19 +2798,21 @@ TEST(InclusiveScanByKey, IncMixedM3each)
         std::cout << "BOLT: i=" << i << ", ";
         std::cout << "key={" << keys[i].a << ", " << keys[i].b << "}; ";
         std::cout << "val={" << input[i].a << ", " << input[i].b << ", " << input[i].c << "}; ";
-        std::cout << "out={" << output[i].a << ", " << output[i].b << ", " << output[i].c << "};" << std::endl;
+        //std::cout << "out={" << output[i].a << ", " << output[i].b << ", " << output[i].c << "};" << std::endl;
     
         std::cout << "GOLD: i=" << i << ", ";
         std::cout << "key={" << keys[i].a << ", " << keys[i].b << "}; ";
         std::cout << "val={" << refInput[i].a << ", " << refInput[i].b << ", " << refInput[i].c << "}; ";
-        std::cout << "out={" << refOutput[i].a << ", " << refOutput[i].b << ", " << refOutput[i].c << "};" << std::endl;
+        //std::cout << "out={" << refOutput[i].a << ", " << refOutput[i].b << ", " << refOutput[i].c << "};" <<std::endl;
         }
     }
 #endif
 
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
+
+#endif
 
 TEST( equalValMult, iValues )
 {
@@ -576,17 +2828,771 @@ TEST( equalValMult, iValues )
     int arrToMatch[11] = { 2, 2, 4, 2, 4, 8, 2, 4, 8, 16, 2 };
 
     // compare results
-    cmpArrays( arrToMatch, out );
+    cmpArrays<int,11>( arrToMatch, out );
 }
 
+TEST( equalValMult, Serial_iValues )
+{
+    int keys[11] = { 7, 0, 0, 3, 3, 3, -5, -5, -5, -5, 3 }; 
+    int vals[11] = { 2, 2, 2, 2, 2, 2,  2,  2,  2,  2, 2 }; 
+    int out[11]; 
+   
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::multiplies<int> mult; 
+   
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+
+    bolt::cl::inclusive_scan_by_key(ctl, keys, keys+11, vals, out, eq, mult ); 
+   
+    int arrToMatch[11] = { 2, 2, 4, 2, 4, 8, 2, 4, 8, 16, 2 };
+
+    // compare results
+    cmpArrays<int,11>( arrToMatch, out );
+}
+
+TEST( equalValMult, MultiCore_iValues )
+{
+    int keys[11] = { 7, 0, 0, 3, 3, 3, -5, -5, -5, -5, 3 }; 
+    int vals[11] = { 2, 2, 2, 2, 2, 2,  2,  2,  2,  2, 2 }; 
+    int out[11]; 
+   
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::multiplies<int> mult; 
+   
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+
+    bolt::cl::inclusive_scan_by_key(ctl, keys, keys+11, vals, out, eq, mult ); 
+   
+    int arrToMatch[11] = { 2, 2, 4, 2, 4, 8, 2, 4, 8, 16, 2 };
+
+    // compare results
+    cmpArrays<int,11>( arrToMatch, out );
+}
+
+TEST(ExclusiveScanByKey, Serial_OffsetExclFloatInplace)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+
+	std::vector< float > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+    bolt::cl::control ctl;
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+    
+    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), input.begin()+ (length/4), refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refInput.begin()+ (length/4), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+
+TEST(ExclusiveScanByKey, MultiCore_OffsetExclFloat)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+    bolt::cl::control ctl;
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+    
+    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), input.begin()+ (length/4),  refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refInput.begin()+ (length/4), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+
+TEST(InclusiveScanByKey, MultiCore_OffsetIncFloat)
+{
+    //setup keys
+    int length = 1<<16;
+
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;//identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+
+    std::vector< float > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+    bolt::cl::control ctl;
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+    /*bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin()+ (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), output.begin()+ (length/4),eq,mM3);
+    gold_scan_by_key(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refOutput.begin()+ (length/4), mM3);
+	// compare results
+    cmpArrays(refOutput, output);*/
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin()+ (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), input.begin()+ (length/4),eq,mM3);
+    gold_scan_by_key(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refInput.begin()+ (length/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+
+
+TEST(ExclusiveScanByKey, Serial_OffsetExclFloat)
+{
+    //setup keys
+    int length = 1<<16;
+    std::vector< int > keys( length, 1);
+
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+    bolt::cl::control ctl;
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+    
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), output.begin()+ (length/4), 2.f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refOutput.begin()+ (length/4), mM3, 2.f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin() + (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), input.begin()+ (length/4),  refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refInput.begin()+ (length/4), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
+TEST(InclusiveScanByKey, Serial_OffsetIncFloat)
+{
+    //setup keys
+    int length = 1<<16;
+
+    std::vector< int > keys( length, 1);
+
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;//identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1.f + rand()%3;
+	bolt::cl::device_vector< float > input( refInput.begin(), refInput.end() );
+
+    // call scan
+
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+    bolt::cl::control ctl;
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu);
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin()+ (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), output.begin()+ (length/4),eq,mM3);
+    //gold_scan_by_key(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refOutput.begin()+ (length/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin()+ (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), input.begin()+ (length/4),eq,mM3);
+    gold_scan_by_key(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refInput.begin()+ (length/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
+TEST(ScanByKeyCLtype, DeviceExclLong)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+
+    std::vector< cl_long > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() , device_keys.end(), input.begin(), output.begin(), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() , device_keys.end(), input.begin(), input.begin(), refInput[0] ,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
+TEST(ScanByKeyCLtype, DeviceInclLong)
+{
+    //setup keys
+    int length = 1<<14;
+
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;//identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+    std::vector< cl_long > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_long > input( refInput.begin(), refInput.end() );
+    // call scan
+
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_long> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(),eq,mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(),eq,mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+
+TEST(ScanByKeyCLtype, DeviceExclUlong)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ulong > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1+ rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() , device_keys.end(), input.begin(), input.begin(), refInput[0] ,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
+TEST(ScanByKeyCLtype, DeviceInclUlong)
+{
+    //setup keys
+    int length = 1<<14;
+
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;//identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ulong > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ulong > input( refInput.begin(), refInput.end() );
+
+    // call scan
+
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ulong> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(),eq,mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(),eq,mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
+TEST(ScanByKeyCLtype, DeviceExclShort)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() , device_keys.end(), input.begin(), output.begin(), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() , device_keys.end(), input.begin(), input.begin(),  refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+
+TEST(ScanByKeyCLtype, DeviceInclShort)
+{
+    //setup keys
+    int length = 1<<14;
+
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;//identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_short > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_short > input( refInput.begin(), refInput.end() );
+
+    // call scan
+
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_short> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(),eq,mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(),eq,mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
+TEST(ScanByKeyCLtype, DeviceExclUShort)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ushort > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 2,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(device_keys.begin() , device_keys.end(), input.begin(), input.begin(),  refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3,  refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+
+TEST(ScanByKeyCLtype, DeviceInclUShort)
+{
+    //setup keys
+    int length = 1<<14;
+
+    std::vector< int > keys( length, 1);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 1;//identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector<int> device_keys( keys.begin(), keys.end());
+    
+	std::vector< cl_ushort > refInput( length);
+	for(int i=0; i<length; i++)
+		refInput[i] = 1 + rand()%3;
+	bolt::cl::device_vector< cl_ushort > input( refInput.begin(), refInput.end() );
+
+    // call scan
+
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<cl_ushort> mM3; 
+  //  MixM3 mM3;
+  //  uddtM2_equal_to eq;
+   
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), output.begin(),eq,mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin(), device_keys.end(), input.begin(), input.begin(),eq,mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
 /////////////////////////Inclusive//////////////////////////////////////////////////
-TEST(InclusiveScanByKey, DeviceVectorInclUdd)
+#if (TEST_DOUBLE == 1)
+
+
+TEST(ExclusiveScanByKey, OffsetExclUdd)
+{
+    //setup keys
+    int length = 1<<16;
+    std::vector< uddtM2 > keys( length, identityMixM2);
+    
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    uddtM2 key = identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< uddtM2 > device_keys( keys.begin(), keys.end());
+    
+    // input and output vectors for device and reference
+    bolt::cl::device_vector< uddtM3 > input(  length, initialMixM3 );
+    //bolt::cl::device_vector< uddtM3 > output( length, identityMixM3 );
+    std::vector< uddtM3 > refInput( length, initialMixM3 );
+    //std::vector< uddtM3 > refOutput( length , identityMixM3);
+    // call scan
+    MixM3 mM3;
+    uddtM2_equal_to eq;
+    
+    //bolt::cl::exclusive_scan_by_key(device_keys.begin() + (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), output.begin()+ (length/4), initialMixM3,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refOutput.begin()+ (length/4), mM3, initialMixM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+    bolt::cl::exclusive_scan_by_key(device_keys.begin() + (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), input.begin()+ (length/4), initialMixM3,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refInput.begin()+ (length/4), mM3, initialMixM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+
+TEST(InclusiveScanByKey, OffsetInclUdd)
 {
     //setup keys
     int length = 1<<16;
 
     std::vector< uddtM2 > keys( length, identityMixM2);
-    bolt::cl::device_vector< uddtM2 > device_keys( length, identityMixM2);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    uddtM2 key = identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< uddtM2 > device_keys( keys.begin(), keys.end());
+    
+    // input and output vectors for device and reference
+    bolt::cl::device_vector< uddtM3 > input(  length, initialMixM3 );
+    //bolt::cl::device_vector< uddtM3 > output( length, identityMixM3 );
+    std::vector< uddtM3 > refInput( length, initialMixM3 );
+    //std::vector< uddtM3 > refOutput( length,  identityMixM3);
+    // call scan
+    MixM3 mM3;
+    uddtM2_equal_to eq;
+    //bolt::cl::inclusive_scan_by_key(device_keys.begin()+ (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), output.begin()+ (length/4),eq,mM3);
+    //gold_scan_by_key(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refOutput.begin()+ (length/4), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(device_keys.begin()+ (length/4), device_keys.end()- (length/4), input.begin()+ (length/4), input.begin()+ (length/4),eq,mM3);
+    gold_scan_by_key(keys.begin()+ (length/4), keys.end()- (length/4), refInput.begin()+ (length/4), refInput.begin()+ (length/4), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+
+TEST(InclusiveScanByKey, Multicore_DeviceVectorInclUdd)
+{
+    //setup keys
+    int length = 1<<16;
+
+    std::vector< uddtM2 > keys( length, identityMixM2);
     // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
     int segmentLength = 0;
     int segmentIndex = 0;
@@ -602,38 +3608,40 @@ TEST(InclusiveScanByKey, DeviceVectorInclUdd)
             ++key;
         }
         keys[i] = key;
-        device_keys[i] = key;
         segmentIndex++;
     }
 
-
+    bolt::cl::device_vector< uddtM2 > device_keys( keys.begin(), keys.end());
+    
     // input and output vectors for device and reference
-    bolt::cl::device_vector< uddtM3 > input(  length, initialMixM3 );
-    bolt::cl::device_vector< uddtM3 > output( length, identityMixM3 );
-    std::vector< uddtM3 > refInput( length, initialMixM3 );
-    std::vector< uddtM3 > refOutput( length );
-    // call scan
-    MixM3 mM3;
+    std::vector< uddtM2 > refInput( length, initialMixM2 );
+    bolt::cl::device_vector< uddtM2 > input(  refInput.begin(), refInput.end() );
+
+    MixM2 mM2;
     uddtM2_equal_to eq;
     ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
 
-    bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(),eq,mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
 
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
-    // compare results
-    cmpArrays(refOutput, output);
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM2);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM2);
+    // compare resultsScanByKeyCLtype
+    cmpArrays(refInput, input);
 }
 
+#endif
 
-
-TEST(InclusiveScanByKey, DeviceVectorInclFloat)
+TEST(InclusiveScanByKey, Multicore_DeviceVectorInclFloat)
 {
     //setup keys
     int length = 1<<16;
     std::vector< int > keys( length);
-    bolt::cl::device_vector< int > device_keys( length);
+
     // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
     int segmentLength = 0;
     int segmentIndex = 0;
@@ -643,41 +3651,45 @@ TEST(InclusiveScanByKey, DeviceVectorInclFloat)
         // start over, i.e., begin assigning new key
         if (segmentIndex == segmentLength)
         {
-           	segmentLength++;
+            segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key;
-        device_keys[i] = key;
         segmentIndex++;
     }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
     // input and output vectors for device and reference
-    bolt::cl::device_vector< float > input( length);
-    bolt::cl::device_vector< float > output( length);
+    
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 2.0f;
-        refInput[i] = 2.0f;
+        refInput[i] =  1.0f + rand()%3;
     }
+	bolt::cl::device_vector< float > input(  refInput.begin(),  refInput.end());
+
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<float> mM3; 
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
 
-TEST(InclusiveScanByKey, DeviceVectorInclDouble)
+TEST(InclusiveScanByKey, Serial_DeviceVectorInclFloat)
 {
     //setup keys
     int length = 1<<16;
     std::vector< int > keys( length);
-    bolt::cl::device_vector< int > device_keys( length);
     // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
     int segmentLength = 0;
     int segmentIndex = 0;
@@ -687,47 +3699,143 @@ TEST(InclusiveScanByKey, DeviceVectorInclDouble)
         // start over, i.e., begin assigning new key
         if (segmentIndex == segmentLength)
         {
-           	segmentLength++;
+            segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key;
-        device_keys[i] = key;
         segmentIndex++;
     }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
     // input and output vectors for device and reference
-    bolt::cl::device_vector< double > input( length);
-    bolt::cl::device_vector< double > output( length);
-    std::vector< double > refInput( length);
-    std::vector< double > refOutput( length);
+    std::vector< float > refInput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 2.0;
-        refInput[i] = 2.0;
+        refInput[i] =  1.0f + rand()%3;
     }
+	bolt::cl::device_vector< float > input(  refInput.begin(),  refInput.end());
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu); 
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(),eq,mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(),eq,mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+TEST(InclusiveScanByKey, MultiCore_DeviceVectorInclFloat)
+{
+    //setup keys
+    int length = 1<<16;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+       std::vector< float > refInput( length);
+    for(int i=0; i<length; i++) {
+        refInput[i] =  1.0f + rand()%3;
+    }
+	bolt::cl::device_vector< float > input(  refInput.begin(),  refInput.end());
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); 
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(),eq,mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(),eq,mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+#if (TEST_DOUBLE == 1)
+TEST(InclusiveScanByKey, Multicore_DeviceVectorInclDouble)
+{
+    //setup keys
+    int length = 1<<16;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< double > refInput( length);
+    for(int i=0; i<length; i++) {
+        refInput[i] =  1.0 + rand()%3;
+    }
+	bolt::cl::device_vector< double > input(  refInput.begin(),  refInput.end());
+
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<double> mM3; 
     // MixM3 mM3;
     // uddtM2_equal_to eq;
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(),eq,mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
 
-
+#endif
 
 
 /////////////////////////Exclusive//////////////////////////////////////////////////
-TEST(ExclusiveScanByKey, DeviceVectorExclFloat)
+
+TEST(ExclusiveScanByKey, Multicore_DeviceVectorExclFloat)
 {
     //setup keys
     int length = 1<<16;
     std::vector< int > keys( length);
-    bolt::cl::device_vector< int > device_keys( length);
     // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
     int segmentLength = 0;
     int segmentIndex = 0;
@@ -736,42 +3844,47 @@ TEST(ExclusiveScanByKey, DeviceVectorExclFloat)
     {
         if (segmentIndex == segmentLength)
         {
-    	      segmentLength++;
+              segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key; // tested with key = 1 also which is actually scan
-        device_keys[i] = key;
         segmentIndex++;
     }
-    // input and output vectors for device and reference
-    bolt::cl::device_vector< float > input( length);
-    bolt::cl::device_vector< float > output( length);
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	float n = 1.f + rand()%3;
+
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0f;
-        refInput[i] = 1.0f;
+        refInput[i] =  1.0f + rand()%3;
     }
+	bolt::cl::device_vector< float > input(  refInput.begin(),  refInput.end());
+
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<float> mM3; 
   
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(),  refInput[0] ,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3,  refInput[0]);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
 
-TEST(ExclusiveScanByKey, DeviceVectorExclDouble)
+TEST(ExclusiveScanByKey, Serial_DeviceVectorExclFloat)
 {
     //setup keys
     int length = 1<<16;
     std::vector< int > keys( length);
-    bolt::cl::device_vector< int > device_keys( length);
+
     // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
     int segmentLength = 0;
     int segmentIndex = 0;
@@ -780,41 +3893,144 @@ TEST(ExclusiveScanByKey, DeviceVectorExclDouble)
     {
         if (segmentIndex == segmentLength)
         {
-    	      segmentLength++;
+              segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key; // tested with key = 1 also which is actually scan
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	std::vector< float > refInput( length);
+    for(int i=0; i<length; i++) {
+        refInput[i] =  1.0f + rand()%3;
+    }
+	bolt::cl::device_vector< float > input(  refInput.begin(),  refInput.end());
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  
+
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu); 
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(),
+    //                                                                                             4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+TEST(ExclusiveScanByKey, MultiCore_DeviceVectorExclFloat)
+{
+    //setup keys
+    int length = 1<<16;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        if (segmentIndex == segmentLength)
+        {
+              segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key; // tested with key = 1 also which is actually scan
+        segmentIndex++;
+    }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	float n = 1.f + rand()%3;
+
+    // input and output vectors for device and reference
+   	std::vector< float > refInput( length);
+    for(int i=0; i<length; i++) {
+        refInput[i] =  1.0f + rand()%3;
+    }
+	bolt::cl::device_vector< float > input(  refInput.begin(),  refInput.end());
+
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(),
+    //                                                                                             4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0] ,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+#if (TEST_DOUBLE == 1)
+TEST(ExclusiveScanByKey, Multicore_DeviceVectorExclDouble)
+{
+    //setup keys
+    int length = 1<<16;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        if (segmentIndex == segmentLength)
+        {
+              segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key; // tested with key = 1 also which is just scan
-        device_keys[i] = key;
         segmentIndex++;
     }
+    bolt::cl::device_vector< int > device_keys( keys.begin(), keys.end());
+    
+	double n = 1.0 + rand()%3;
+
     // input and output vectors for device and reference
-    bolt::cl::device_vector< double > input( length);
-    bolt::cl::device_vector< double > output( length);
-    std::vector< double> refInput( length);
-    std::vector< double > refOutput( length);
+   	std::vector< double > refInput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0;
-        refInput[i] = 1.0;
+        refInput[i] =  1.0 + rand()%3;
     }
+	bolt::cl::device_vector< double > input(  refInput.begin(),  refInput.end());
+
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<double> mM3; 
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 4.0,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0);
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), 4.0,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), refInput[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+
 }
 
-TEST(ExclusiveScanByKey, DeviceVectorExclUdd)
+TEST(ExclusiveScanByKey, Multicore_DeviceVectorExclUdd)
 {
     //setup keys
     int length = 1<<16;
     std::vector< uddtM2 > keys( length, identityMixM2);
-    bolt::cl::device_vector< uddtM2 > device_keys( length, identityMixM2);
+    
     // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
     int segmentLength = 0;
     int segmentIndex = 0;
@@ -829,37 +4045,27 @@ TEST(ExclusiveScanByKey, DeviceVectorExclUdd)
             ++key;
         }
         keys[i] = key;
-        device_keys[i] = key ;
         segmentIndex++;
     }
-    // input and output vectors for device and reference
-    bolt::cl::device_vector< uddtM3 > input(  length, initialMixM3 );
-    bolt::cl::device_vector< uddtM3 > output( length, identityMixM3 );
-    std::vector< uddtM3 > refInput( length, initialMixM3 );
-    std::vector< uddtM3 > refOutput( length );
-    // call scan
-    MixM3 mM3;
+    bolt::cl::device_vector< uddtM2 > device_keys( keys.begin(), keys.end());
+    std::vector< uddtM2 > refInput( length, initialMixM2 );
+    bolt::cl::device_vector< uddtM2 > input(  refInput.begin(), refInput.end() );
+    MixM2 mM2;
     uddtM2_equal_to eq;
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), initialMixM3,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, initialMixM3);
+    //bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), output.begin(), initialMixM3,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, initialMixM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, device_keys.begin(), device_keys.end(), input.begin(), input.begin(), initialMixM2, eq, mM2);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM2, initialMixM2);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+
 }
-
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-
-
-
-
 
 TEST(InclusiveScanByKey, MulticoreInclUdd)
 {
@@ -884,23 +4090,77 @@ TEST(InclusiveScanByKey, MulticoreInclUdd)
     }
     // input and output vectors for device and reference
     std::vector< uddtM3 > input(  length, initialMixM3 );
-    std::vector< uddtM3 > output( length, identityMixM3 );
+    //std::vector< uddtM3 > output( length, identityMixM3 );
     std::vector< uddtM3 > refInput( length, initialMixM3 );
-    std::vector< uddtM3 > refOutput( length );
+    //std::vector< uddtM3 > refOutput( length );
     // call scan
     MixM3 mM3;
     uddtM2_equal_to eq;
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu);
-    bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+}
+
+#endif
+
+TEST(InclusiveScanByKey, InclFloat)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    // input and output vectors for device and reference
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+         input[i] = 1.f + rand()%3;//2.0f;
+         refInput[i] = input[i];//2.0f;
+    }
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+
+    //bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
 }
 
 
-TEST(InclusiveScanByKey, MulticoreInclFloat)
+TEST(InclusiveScanByKey,SerialInclFloat)
 {
     //setup keys
     int length = 1<<24;
@@ -914,7 +4174,7 @@ TEST(InclusiveScanByKey, MulticoreInclFloat)
         // start over, i.e., begin assigning new key
         if (segmentIndex == segmentLength)
         {
-           	segmentLength++;
+            segmentLength++;
             segmentIndex = 0;
             ++key;
         }
@@ -923,26 +4183,78 @@ TEST(InclusiveScanByKey, MulticoreInclFloat)
     }
     // input and output vectors for device and reference
     std::vector< float > input( length);
-    std::vector< float > output( length);
+    //std::vector< float > output( length);
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
+    //std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0f;
-        refInput[i] = 1.0f;
+        input[i] = 1.0f + rand()%3;
+        refInput[i] = input[i];
     }
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<float> mM3; 
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
-    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu); 
+    //bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
 
 
+TEST(InclusiveScanByKey, MulticoreInclFloat)
+{
+    //setup keys
+    int length = 1<<24;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+	for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    // input and output vectors for device and reference
+    std::vector< float > refInput( length);
+    for(int i=0; i<length; i++) 
+	{
+        refInput[i]  = 1.0f + rand()%3;
+    }	
+    std::vector< float > input( refInput.begin(), refInput.end());
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
+    //bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+#if (TEST_DOUBLE == 1)
 TEST(InclusiveScanByKey, MulticoreInclDouble)
 {
     //setup keys
@@ -957,7 +4269,7 @@ TEST(InclusiveScanByKey, MulticoreInclDouble)
         // start over, i.e., begin assigning new key
         if (segmentIndex == segmentLength)
         {
-           	segmentLength++;
+            segmentLength++;
             segmentIndex = 0;
             ++key;
         }
@@ -966,25 +4278,193 @@ TEST(InclusiveScanByKey, MulticoreInclDouble)
     }
     // input and output vectors for device and reference
     std::vector< double > input( length);
-    std::vector< double > output( length);
+    //std::vector< double > output( length);
     std::vector< double > refInput( length);
-    std::vector< double > refOutput( length);
+    //std::vector< double > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0;
-        refInput[i] = 1.0;
+		input[i] = 1.0 + rand()%3;
+        refInput[i] = input[i];
     }
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<double> mM3; 
     // MixM3 mM3;
     // uddtM2_equal_to eq;
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
-    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), eq, mM3);
+    //gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::inclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), eq, mM3);
+    gold_scan_by_key(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+}
+
+#endif
+
+TEST(ExclusiveScanByKey, ExclFloat)
+{
+    //setup keys
+    int length = 1<<14;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        if (segmentIndex == segmentLength)
+        {
+              segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key; // tested with key = 1 also which is actually scan
+        segmentIndex++;
+    }
+    // input and output vectors for device and reference
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+
+
+    for(int i=0; i<length; i++) {
+        input[i] = 1.f + rand()%3;
+        refInput[i] = input[i];
+    }
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+    bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), input[0] ,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+TEST(ExclusiveScanByKey, SerialExclFloat)
+{
+    //setup keys
+    int length = 1<<24;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        if (segmentIndex == segmentLength)
+        {
+              segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key; // tested with key = 1 also which is actually scan
+        segmentIndex++;
+    }
+
+    // input and output vectors for device and reference
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+         input[i] = 1.f + rand()%3;
+         refInput[i] = input[i];
+    }
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu); 
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+    bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), input[0] ,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+TEST(APPSDKInclusiveScanByKey, Multicore_InclusiveIntAPPSDK)
+{
+    bool status = 1;
+    int count = 1;
+    int height = 1024;
+    int width = 1024;
+    int DataSize = height * width;
+    std::vector<int> HostKeyBuffer(DataSize);
+    std::vector<int> HostDataBuffer;
+    std::vector<int> deviceOutput(DataSize);
+    bolt::cl::device_vector<int> KeyBuffer(DataSize);
+    bolt::cl::device_vector<int> dataBuffer(DataSize);
+    // Assign key
+    for(int i=0; i<height; ++i) {
+        for(int j=0; j<width; ++j) {
+            HostKeyBuffer[(i*width) + j] = i;
+        }
+    }
+
+//	bolt::cl::control::e_RunMode specifiedRunMode = bolt::cl::control::SerialCpu;
+    bolt::cl::control::e_RunMode specifiedRunMode = bolt::cl::control::MultiCoreCpu;
+    bolt::cl::control::getDefault().setForceRunMode(specifiedRunMode);  // dissable this line, works fine with GPU/SerialCpu
+
+while(status) {
+    // Assign data
+    HostDataBuffer.assign(DataSize, 1);
+
+    // Copy key and data host to device
+    {
+        bolt::cl::device_vector<int>::pointer pk=KeyBuffer.data();
+        memcpy(pk.get(), HostKeyBuffer.data(), DataSize * sizeof(int));
+
+        bolt::cl::device_vector<int>::pointer pd=dataBuffer.data();
+        memcpy(pd.get(), HostDataBuffer.data(), DataSize * sizeof(int));
+    }
+
+    bolt::cl::inclusive_scan_by_key(KeyBuffer.begin(),
+                                    KeyBuffer.end(),
+                                    dataBuffer.begin(),
+                                    dataBuffer.begin());
+    // copy data device to host
+    {
+        bolt::cl::device_vector<int>::pointer pd=dataBuffer.data();
+        memcpy(deviceOutput.data(), pd.get(), DataSize * sizeof(int));
+    }
+
+    // CPU implementation
+    for(int i=0; i<height; ++i) {
+        for(int j=1; j<width; ++j) {
+            HostDataBuffer[(i*width) + j] = HostDataBuffer[(i*width) + j] + HostDataBuffer[(i*width) + (j-1)];
+        }
+    }
+
+    // Verify
+    for(int i=0; i<DataSize; ++i) {
+        if(HostDataBuffer[i] != deviceOutput[i]) { status = 0; break; }
+    }
+
+    //std::cout << "Verify Result : " << ((status == 1) ? "PASS" : "FAIL") << std::endl;
+    if(++count > 20) break;
+}
+    
 }
 
 
@@ -1002,35 +4482,37 @@ TEST(ExclusiveScanByKey, MulticoreExclFloat)
     {
         if (segmentIndex == segmentLength)
         {
-    	      segmentLength++;
+              segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key; // tested with key = 1 also which is actually scan
         segmentIndex++;
     }
+
+
     // input and output vectors for device and reference
     std::vector< float > input( length);
-    std::vector< float > output( length);
+    //std::vector< float > output( length);
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
+    //std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0f;
-        refInput[i] = 1.0f;
+         input[i] = 1.f + rand()%3;
+        refInput[i] = input[i];
     }
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<float> mM3; 
   
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), input[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
 
+#if (TEST_DOUBLE == 1)
 TEST(ExclusiveScanByKey, MulticoreExclDouble)
 {
     //setup keys
@@ -1044,33 +4526,41 @@ TEST(ExclusiveScanByKey, MulticoreExclDouble)
     {
         if (segmentIndex == segmentLength)
         {
-    	      segmentLength++;
+              segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key; // tested with key = 1 also which is just scan
         segmentIndex++;
     }
+
     // input and output vectors for device and reference
     std::vector< double > input( length);
-    std::vector< double > output( length);
+    //std::vector< double > output( length);
     std::vector< double> refInput( length);
-    std::vector< double > refOutput( length);
+    //std::vector< double > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0;
-        refInput[i] = 1.0;
+        input[i] = 1.0 + rand()%3;
+        refInput[i] = input[i];
     }
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<double> mM3; 
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), 4.0,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0);
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), 4.0,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), input[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0] );
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+
 }
+
 
 TEST(ExclusiveScanByKey, MulticoreExclUdd)
 {
@@ -1095,20 +4585,27 @@ TEST(ExclusiveScanByKey, MulticoreExclUdd)
     }
     // input and output vectors for device and reference
     std::vector< uddtM3 > input(  length, initialMixM3 );
-    std::vector< uddtM3 > output( length, identityMixM3 );
+    //std::vector< uddtM3 > output( length, identityMixM3 );
     std::vector< uddtM3 > refInput( length, initialMixM3 );
-    std::vector< uddtM3 > refOutput( length );
+    //std::vector< uddtM3 > refOutput( length );
     // call scan
     MixM3 mM3;
     uddtM2_equal_to eq;
-    ::cl::Context myContext = bolt::cl::control::getDefault( ).getContext( );
+   
     bolt::cl::control ctl = bolt::cl::control::getDefault( );
     ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); // tested for serial cpu also
-    bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), initialMixM3,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, initialMixM3);
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), initialMixM3,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, initialMixM3);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), initialMixM3,eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, initialMixM3);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+
 }
+#endif
 
 /////////////////////////////////////////////////CL Exclusive test Cases after fix ///////////////////////////
 
@@ -1125,32 +4622,139 @@ TEST(ExclusiveScanByKey, CLscanbykeyExclFloat)
     {
         if (segmentIndex == segmentLength)
         {
-    	      segmentLength++;
+              segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key; // tested with key = 1 also which is actually scan
         segmentIndex++;
     }
+
+    // input and output vectors for device and reference
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.f + rand()%3;
+        refInput[i] = input[i];
+    }
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+  
+    //bolt::cl::exclusive_scan_by_key(keys.begin(), keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(keys.begin(), keys.end(), input.begin(), input.begin(), input[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+TEST(ExclusiveScanByKey, SerialCLscanbykeyExclFloat)
+{
+    //setup keys
+    int length = 1<<18;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        if (segmentIndex == segmentLength)
+        {
+              segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key; // tested with key = 1 also which is actually scan
+        segmentIndex++;
+    }
+
+
     // input and output vectors for device and reference
     std::vector< float > input( length);
     std::vector< float > output( length);
     std::vector< float > refInput( length);
     std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0f;
-        refInput[i] = 1.0f;
+        input[i] = 1.f + rand()%3;
+        refInput[i] = input[i];
     }
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<float> mM3; 
+
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu); 
   
-    bolt::cl::exclusive_scan_by_key(keys.begin(), keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), input[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
 
+TEST(ExclusiveScanByKey, MultiCoreCLscanbykeyExclFloat)
+{
+    //setup keys
+    int length = 1<<18;
+    std::vector< int > keys( length);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    int key = 0;
+    for (int i = 0; i < length; i++)
+    {
+        if (segmentIndex == segmentLength)
+        {
+              segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key; // tested with key = 1 also which is actually scan
+        segmentIndex++;
+    }
+
+	//float n = 1.f + rand()%3;
+
+    // input and output vectors for device and reference
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.f + rand()%3;
+        refInput[i] = input[i];
+    }
+    // call scan
+    bolt::cl::equal_to<int> eq; 
+    bolt::cl::plus<float> mM3; 
+
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); 
+  
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), 4.0f,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0f);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), input.begin(), input[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
+    // compare results
+    cmpArrays(refInput, input);
+
+}
+
+#if (TEST_DOUBLE == 1)
 TEST(ExclusiveScanByKey, CLscanbykeyExclDouble)
 {
     //setup keys
@@ -1164,30 +4768,39 @@ TEST(ExclusiveScanByKey, CLscanbykeyExclDouble)
     {
         if (segmentIndex == segmentLength)
         {
-    	      segmentLength++;
+              segmentLength++;
             segmentIndex = 0;
             ++key;
         }
         keys[i] = key; // tested with key = 1 also which is just scan
         segmentIndex++;
     }
+
+	//float n = 1.f + rand()%3;
+
     // input and output vectors for device and reference
     std::vector< double > input( length);
-    std::vector< double > output( length);
+    //std::vector< double > output( length);
     std::vector< double> refInput( length);
-    std::vector< double > refOutput( length);
+    //std::vector< double > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1.0;
-        refInput[i] = 1.0;
+         input[i] = 1.0 + rand()%3;
+        refInput[i] = input[i];
     }
     // call scan
     bolt::cl::equal_to<int> eq; 
     bolt::cl::plus<double> mM3; 
-    bolt::cl::exclusive_scan_by_key(keys.begin(), keys.end(), input.begin(), output.begin(), 4.0,eq, mM3);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0);
+    //bolt::cl::exclusive_scan_by_key(keys.begin(), keys.end(), input.begin(), output.begin(), 4.0,eq, mM3);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM3, 4.0);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key(keys.begin(), keys.end(), input.begin(), input.begin(), input[0],eq, mM3);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM3, refInput[0]);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
+#endif
 
 TEST(ExclusiveScanByKey, CLscanbykeyExclUDD)
 {
@@ -1212,23 +4825,112 @@ TEST(ExclusiveScanByKey, CLscanbykeyExclUDD)
     }
     // input and output vectors for device and reference
     std::vector< uddtM2 > input(  length, initialMixM2 );
-    std::vector< uddtM2 > output( length, identityMixM2 );
+    //std::vector< uddtM2 > output( length, identityMixM2 );
     std::vector< uddtM2 > refInput( length, initialMixM2 );
-    std::vector< uddtM2 > refOutput( length );
+    //std::vector< uddtM2 > refOutput( length );
     // call scan
     MixM2 mM2;
     uddtM2_equal_to eq;
-    bolt::cl::exclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), initialMixM2,eq, mM2);
-    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM2, initialMixM2);
+    //bolt::cl::exclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), output.begin(), initialMixM2,eq, mM2);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM2, initialMixM2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key( keys.begin(), keys.end(), input.begin(), input.begin(), initialMixM2,eq, mM2);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM2, initialMixM2);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+
+}
+
+TEST(ExclusiveScanByKey, SerialCLscanbykeyExclUDD)
+{
+    //setup keys
+    int length = 1<<18;
+    std::vector< uddtM2 > keys( length, identityMixM2);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    uddtM2 key = identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    // input and output vectors for device and reference
+    std::vector< uddtM2 > input(  length, initialMixM2 );
+   // std::vector< uddtM2 > output( length, identityMixM2 );
+    std::vector< uddtM2 > refInput( length, initialMixM2 );
+    //std::vector< uddtM2 > refOutput( length );
+    // call scan
+    MixM2 mM2;
+    uddtM2_equal_to eq;
+
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::SerialCpu); 
+  
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), initialMixM2,eq,mM2);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM2, initialMixM2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::cl::exclusive_scan_by_key( ctl, keys.begin(), keys.end(), input.begin(), input.begin(), initialMixM2,eq, mM2);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM2, initialMixM2);
+    // compare results
+    cmpArrays(refInput, input);
 }
 
 
+TEST(ExclusiveScanByKey, MulticoreCLscanbykeyExclUDD)
+{
+    //setup keys
+    int length = 1<<18;
+    std::vector< uddtM2 > keys( length, identityMixM2);
+    // keys = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5,...}
+    int segmentLength = 0;
+    int segmentIndex = 0;
+    uddtM2 key = identityMixM2;
+    for (int i = 0; i < length; i++)
+    {
+        // start over, i.e., begin assigning new key
+        if (segmentIndex == segmentLength)
+        {
+            segmentLength++;
+            segmentIndex = 0;
+            ++key;
+        }
+        keys[i] = key;
+        segmentIndex++;
+    }
+    // input and output vectors for device and reference
+    std::vector< uddtM2 > input(  length, initialMixM2 );
+    //std::vector< uddtM2 > output( length, identityMixM2 );
+    std::vector< uddtM2 > refInput( length, initialMixM2 );
+    //std::vector< uddtM2 > refOutput( length );
+    // call scan
+    MixM2 mM2;
+    uddtM2_equal_to eq;
 
+    bolt::cl::control ctl = bolt::cl::control::getDefault( );
+    ctl.setForceRunMode(bolt::cl::control::MultiCoreCpu); 
+  
+    //bolt::cl::exclusive_scan_by_key(ctl, keys.begin(), keys.end(), input.begin(), output.begin(), initialMixM2,eq,mM2);
+    //gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refOutput.begin(), mM2, initialMixM2);
+    //// compare results
+    //cmpArrays(refOutput, output);
 
-
-
+	bolt::cl::exclusive_scan_by_key(ctl,  keys.begin(), keys.end(), input.begin(), input.begin(), initialMixM2,eq, mM2);
+    gold_scan_by_key_exclusive(keys.begin(), keys.end(), refInput.begin(), refInput.begin(), mM2, initialMixM2);
+    // compare results
+    cmpArrays(refInput, input);
+}
 
 // paste from above
 #endif
@@ -1236,7 +4938,7 @@ TEST(ExclusiveScanByKey, CLscanbykeyExclUDD)
 int _tmain(int argc, _TCHAR* argv[])
 {
     //  Register our minidump generating logic
-    bolt::miniDumpSingleton::enableMiniDumps( );
+    //bolt::miniDumpSingleton::enableMiniDumps( );
 
     //  Initialize googletest; this removes googletest specific flags from command line
     ::testing::InitGoogleTest( &argc, &argv[ 0 ] );
@@ -1253,8 +4955,10 @@ int _tmain(int argc, _TCHAR* argv[])
         desc.add_options()
             ( "help,h",         "produces this help message" )
             ( "queryOpenCL,q",  "Print queryable platform and device info and return" )
-            ( "platform,p",     boost::program_options::value< cl_uint >( &userPlatform )->default_value( 0 ),	"Specify the platform under test" )
-            ( "device,d",       boost::program_options::value< cl_uint >( &userDevice )->default_value( 0 ),	"Specify the device under test" )
+            ( "platform,p",     boost::program_options::value< cl_uint >( &userPlatform )->default_value( 0 ),
+                                                                           "Specify the platform under test" )
+            ( "device,d",       boost::program_options::value< cl_uint >( &userDevice )->default_value( 0 ),
+                                                                           "Specify the device under test" )
             ;
 
 
@@ -1264,7 +4968,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
         if( vm.count( "help" ) )
         {
-            //	This needs to be 'cout' as program-options does not support wcout yet
+            // This needs to be 'cout' as program-options does not support wcout yet
             std::cout << desc << std::endl;
             return 0;
         }
@@ -1277,17 +4981,17 @@ int _tmain(int argc, _TCHAR* argv[])
         //  The following 3 options are not implemented yet; they are meant to be used with ::clCreateContextFromType()
         if( vm.count( "gpu" ) )
         {
-            deviceType	= CL_DEVICE_TYPE_GPU;
+            deviceType = CL_DEVICE_TYPE_GPU;
         }
         
         if( vm.count( "cpu" ) )
         {
-            deviceType	= CL_DEVICE_TYPE_CPU;
+            deviceType = CL_DEVICE_TYPE_CPU;
         }
 
         if( vm.count( "all" ) )
         {
-            deviceType	= CL_DEVICE_TYPE_ALL;
+            deviceType = CL_DEVICE_TYPE_ALL;
         }
 
     }
@@ -1327,7 +5031,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
     // Device info
     std::vector< cl::Device > devices;
-    bolt::cl::V_OPENCL( platforms.front( ).getDevices( CL_DEVICE_TYPE_ALL, &devices ), "Platform::getDevices() failed" );
+    bolt::cl::V_OPENCL( platforms.front( ).getDevices( CL_DEVICE_TYPE_ALL, &devices ),"Platform::getDevices() failed");
 
     cl::Context myContext( devices.at( userDevice ) );
     cl::CommandQueue myQueue( myContext, devices.at( userDevice ) );
@@ -1360,7 +5064,7 @@ int _tmain(int argc, _TCHAR* argv[])
     {
         bolt::tout << _T( "\nFailed tests detected in test pass; please run test again with:" ) << std::endl;
         bolt::tout << _T( "\t--gtest_filter=<XXX> to select a specific failing test of interest" ) << std::endl;
-        bolt::tout << _T( "\t--gtest_catch_exceptions=0 to generate minidump of failing test, or" ) << std::endl;
+        bolt::tout << _T( "\t--gtest_catch_exceptions=0 to generate minidump of failing test, or" ) << std::endl;      
         bolt::tout << _T( "\t--gtest_break_on_failure to debug interactively with debugger" ) << std::endl;
         bolt::tout << _T( "\t    (only on googletest assertion failures, not SEH exceptions)" ) << std::endl;
     }

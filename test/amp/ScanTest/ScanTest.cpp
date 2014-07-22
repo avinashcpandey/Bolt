@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -22,6 +22,9 @@
 #include <gtest/gtest.h>
 #include <array>
 #include "bolt/amp/functional.h"
+#include "bolt/amp/iterator/constant_iterator.h"
+#define TEST_DOUBLE 1
+#define TEST_LARGE_BUFFERS 1
 
 #if 1
 
@@ -31,7 +34,7 @@
 //    * use of bolt with STL::array iterators
 //    * use of bolt with default plus 
 //    * use of bolt with explicit plus argument
-//template< size_t arraySize >
+//template< int arraySize >
 //void simpleScanArray( )
 //{
   // Binary operator
@@ -51,17 +54,17 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 //  Fixture classes are now defined to enable googletest to process type parameterized tests
 
-//  This class creates a C++ 'TYPE' out of a size_t value
-template< size_t N >
+//  This class creates a C++ 'TYPE' out of a int value
+template< int N >
 class TypeValue
 {
 public:
-    static const size_t value = N;
+    static const int value = N;
 };
 
 //  Explicit initialization of the C++ static const
-template< size_t N >
-const size_t TypeValue< N >::value;
+template< int N >
+const int TypeValue< N >::value;
 
 //  Test fixture class, used for the Type-parameterized tests
 //  Namely, the tests that use std::array and TYPED_TEST_P macros
@@ -77,7 +80,7 @@ public:
         for( int i=0; i < ArraySize; i++ )
         {
             stdInput[ i ] = 1;
-            boltInput[ i ] = 1;
+            boltInput[ i ] =  stdInput[i];
         }
     };
 
@@ -90,20 +93,188 @@ public:
 protected:
     typedef typename std::tuple_element< 0, ArrayTuple >::type ArrayType;
     // typedef typename std::tuple_element< 0, ArrayTuple >::type::value ArraySize;
-    static const size_t ArraySize = typename std::tuple_element< 1, ArrayTuple >::type::value;
+    static const int ArraySize = typename std::tuple_element< 1, ArrayTuple >::type::value;
 
     typename std::array< ArrayType, ArraySize > stdInput, boltInput;
     int m_Errors;
 };
 
 
+class scanStdVectorWithIters:public ::testing::TestWithParam<int>
+{
+protected:
+    int myStdVectSize;
+public:
+    scanStdVectorWithIters():myStdVectSize(GetParam()){
+    }
+};
+
+typedef scanStdVectorWithIters ScanOffsetTest;
 
 
+TEST_P (ScanOffsetTest, InclOffsetTestFloat)
+{
+	float n = 1.f + rand()%3;
+	std::vector < float > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< float > input( std_input.begin(), std_input.end());
 
+    std::vector< float > refInput( myStdVectSize, n);
+   // call scan
+    bolt::amp::plus<float> ai2;
+    bolt::amp::inclusive_scan( input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , ai2 );
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/2);
+} 
+
+TEST_P (ScanOffsetTest, ExclOffsetTestFloat)
+{
+	float n = 1.f + rand()%3;
+    std::vector < float > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< float > input( std_input.begin(), std_input.end());
+    std::vector< float > refInput( myStdVectSize,n);
+   
+    refInput[myStdVectSize/4] = 3.0f;
+
+    // call scan
+    bolt::amp::plus<float> ai2;
+
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+    bolt::amp::exclusive_scan(input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , 3.0f, ai2  );
+
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/4);
+} 
+
+
+TEST_P (ScanOffsetTest, InclOffsetTestFloatSerial)
+{
+	float n = 1.f + rand()%3;
+
+    std::vector < float > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< float > input( std_input.begin(), std_input.end());
+    std::vector< float > refInput( myStdVectSize, n);
+   
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+   // call scan
+    bolt::amp::plus<float> ai2;
+    bolt::amp::inclusive_scan( ctl, input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , ai2 );
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/4);
+} 
+TEST_P (ScanOffsetTest, ExclOffsetTestFloatSerial)
+{
+	float n = 1.f + rand()%3;
+
+    std::vector < float > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< float > input( std_input.begin(), std_input.end());
+    std::vector< float > refInput( myStdVectSize,n);
+   
+    //refInput[myStdVectSize/4] = 3.0f;
+
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    // call scan
+    bolt::amp::plus<float> ai2;
+
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+    bolt::amp::exclusive_scan(ctl, input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , refInput[myStdVectSize/4], ai2  );
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/4);
+} 
+
+
+TEST_P (ScanOffsetTest, InclOffsetTestFloatMultiCore)
+{
+	float n = 1.f + rand()%3;
+
+    std::vector < float > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< float > input( std_input.begin(), std_input.end());
+    std::vector< float > refInput( myStdVectSize, n);
+   
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+   // call scan
+    bolt::amp::plus<float> ai2;
+    bolt::amp::inclusive_scan( ctl, input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , ai2 );
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/4);
+} 
+TEST_P (ScanOffsetTest, ExclOffsetTestFloatMultiCore)
+{
+	float n = 1.f + rand()%3;
+
+    std::vector < float > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< float > input( std_input.begin(), std_input.end());
+    std::vector< float > refInput( myStdVectSize,n);
+   
+    refInput[myStdVectSize/4] = 3.0f;
+
+     bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    // call scan
+    bolt::amp::plus<float> ai2;
+
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+    bolt::amp::exclusive_scan(ctl, input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , 3.f, ai2  );
+
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/4);
+} 
+
+#if (TEST_DOUBLE == 1)
+
+TEST_P (ScanOffsetTest, InclOffsetTestDouble)
+{
+	double n = 1.0 + rand()%3;
+
+    std::vector < double > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< double > input( std_input.begin(), std_input.end());
+    std::vector< double > refInput( myStdVectSize, n);
+   // call scan
+    bolt::amp::plus<double> ai2;
+    bolt::amp::inclusive_scan( input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , ai2 );
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+
+    cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/4);
+} 
+TEST_P (ScanOffsetTest, ExclOffsetTestDouble)
+{
+	double n = 1.0 + rand()%3;
+
+    std::vector < double > std_input( myStdVectSize, n);
+    bolt::amp::device_vector< double > input( std_input.begin(), std_input.end());
+    std::vector< double > refInput( myStdVectSize,n);
+   
+    refInput[myStdVectSize/4] = 3.0f;
+
+    // call scan
+    bolt::amp::plus<double> ai2;
+
+    ::std::partial_sum(refInput.begin()+ (myStdVectSize/4) , refInput.end()- (myStdVectSize/4), refInput.begin()+ (myStdVectSize/4) , ai2);
+    bolt::amp::exclusive_scan(input.begin() + (myStdVectSize/4),    input.end() - (myStdVectSize/4),    input.begin()+ (myStdVectSize/4) , 3.0f, ai2  );
+
+    // ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    //  bolt::cl::exclusive_scan( input.begin(),    input.end(),    input.begin(), 3.0f, ai2 );
+
+
+   cmpArrays(refInput, input);
+    printf("\nPass for size=%d Offset=%d\n",myStdVectSize, myStdVectSize/4);
+} 
+#endif
+
+INSTANTIATE_TEST_CASE_P(inclusiveScanIterIntLimit, ScanOffsetTest, ::testing::Range(1025, 65535, 5111)); 
 
 //  Explicit initialization of the C++ static const
 template< typename ArrayTuple >
-const size_t ScanArrayTest< ArrayTuple >::ArraySize;
+const int ScanArrayTest< ArrayTuple >::ArraySize;
 
 TYPED_TEST_CASE_P( ScanArrayTest );
 
@@ -113,7 +284,7 @@ TYPED_TEST_P( ScanArrayTest, InPlace )
 
     //  Calling the actual functions under test
     ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
-    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end(),boltInput.begin());
 
     //  The returned iterator should be one past the 
     EXPECT_EQ( stdInput.end( ), stdEnd );
@@ -128,14 +299,63 @@ TYPED_TEST_P( ScanArrayTest, InPlace )
     //  Loop through the array and compare all the values with each other
     cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
 }
+
+TYPED_TEST_P( ScanArrayTest, SerialInPlace )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    //  Calling the actual functions under test
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin( ),boltInput.end(),boltInput.begin());
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
+}
+
+TYPED_TEST_P( ScanArrayTest, MulticoreInPlace )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    //  Calling the actual functions under test
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin( ),boltInput.end(),boltInput.begin());
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
+}
+
 
 TYPED_TEST_P( ScanArrayTest, InPlacePlusFunction )
 {
     typedef std::array< ArrayType, ArraySize > ArrayCont;
 
     //  Calling the actual functions under test
-    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ), bolt::amp::plus< ArrayType >( ) );
-    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ), bolt::amp::plus< ArrayType >( ) );
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ),
+                                                                        bolt::amp::plus< ArrayType >( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ),
+                                                                                    bolt::amp::plus< ArrayType >( ) );
 
     //  The returned iterator should be one past the 
     EXPECT_EQ( stdInput.end( ), stdEnd );
@@ -150,14 +370,67 @@ TYPED_TEST_P( ScanArrayTest, InPlacePlusFunction )
     //  Loop through the array and compare all the values with each other
     cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
 }
+
+TYPED_TEST_P( ScanArrayTest, SerialInPlacePlusFunction )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    //  Calling the actual functions under test
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ),
+                                                                        bolt::amp::plus< ArrayType >( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin( ),boltInput.end(),boltInput.begin(),
+                                                                                    bolt::amp::plus< ArrayType >( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
+}
+
+TYPED_TEST_P( ScanArrayTest, MulticoreInPlacePlusFunction )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    //  Calling the actual functions under test
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ),
+                                                                        bolt::amp::plus< ArrayType >( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin( ),boltInput.end(),boltInput.begin(),
+                                                                                    bolt::amp::plus< ArrayType >( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
+}
+
 
 TYPED_TEST_P( ScanArrayTest, InPlaceMaxFunction )
 {
     typedef std::array< ArrayType, ArraySize > ArrayCont;
 
     //  Calling the actual functions under test
-    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ), bolt::amp::maximum< ArrayType >( ) );
-    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ), bolt::amp::maximum< ArrayType >( ) );
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ),
+                                                                    bolt::amp::maximum< ArrayType >( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ),boltInput.end(),boltInput.begin(),
+                                                                                bolt::amp::maximum< ArrayType >( ) );
 
     //  The returned iterator should be one past the 
     EXPECT_EQ( stdInput.end( ), stdEnd );
@@ -172,6 +445,57 @@ TYPED_TEST_P( ScanArrayTest, InPlaceMaxFunction )
     //  Loop through the array and compare all the values with each other
     cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
 }
+
+TYPED_TEST_P( ScanArrayTest, SerialInPlaceMaxFunction )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    //  Calling the actual functions under test
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ),
+                                                                    bolt::amp::maximum< ArrayType >( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin(),boltInput.end(),boltInput.begin(),
+                                                                                bolt::amp::maximum< ArrayType >( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
+}
+
+TYPED_TEST_P( ScanArrayTest, MulticoreInPlaceMaxFunction )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    //  Calling the actual functions under test
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ),
+                                                                    bolt::amp::maximum< ArrayType >( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin(),boltInput.end(),boltInput.begin(),
+                                                                                bolt::amp::maximum< ArrayType >( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdInput, boltInput );
+}
+
 
 TYPED_TEST_P( ScanArrayTest, OutofPlace )
 {
@@ -182,7 +506,7 @@ TYPED_TEST_P( ScanArrayTest, OutofPlace )
 
     //  Calling the actual functions under test, out of place semantics
     ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdResult.begin( ) );
-    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltResult.begin( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin(),boltInput.end(),boltResult.begin());
 
     //  The returned iterator should be one past the end of the result array
     EXPECT_EQ( stdResult.end( ), stdEnd );
@@ -198,7 +522,64 @@ TYPED_TEST_P( ScanArrayTest, OutofPlace )
     cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdResult, boltResult );
 }
 
-REGISTER_TYPED_TEST_CASE_P( ScanArrayTest, InPlace, InPlacePlusFunction, InPlaceMaxFunction, OutofPlace );
+TYPED_TEST_P( ScanArrayTest, SerialOutofPlace )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    //  Declare temporary arrays to store results for out of place computation
+    ArrayCont stdResult, boltResult;
+
+    //  Calling the actual functions under test, out of place semantics
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdResult.begin( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin(),boltInput.end(),boltResult.begin());
+
+    //  The returned iterator should be one past the end of the result array
+    EXPECT_EQ( stdResult.end( ), stdEnd );
+    EXPECT_EQ( boltResult.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdResult.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltResult.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdResult, boltResult );
+}
+
+TYPED_TEST_P( ScanArrayTest, MulticoreOutofPlace )
+{
+    typedef std::array< ArrayType, ArraySize > ArrayCont;
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    //  Declare temporary arrays to store results for out of place computation
+    ArrayCont stdResult, boltResult;
+
+    //  Calling the actual functions under test, out of place semantics
+    ArrayCont::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdResult.begin( ) );
+    ArrayCont::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin(),boltInput.end(),boltResult.begin());
+
+    //  The returned iterator should be one past the end of the result array
+    EXPECT_EQ( stdResult.end( ), stdEnd );
+    EXPECT_EQ( boltResult.end( ), boltEnd );
+
+    ArrayCont::difference_type stdNumElements = std::distance( stdResult.begin( ), stdEnd );
+    ArrayCont::difference_type boltNumElements = std::distance( boltResult.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpStdArray< ArrayType, ArraySize >::cmpArrays( stdResult, boltResult );
+}
+
+
+
+REGISTER_TYPED_TEST_CASE_P( ScanArrayTest, InPlace, SerialInPlace, MulticoreInPlace, InPlacePlusFunction, 
+                           SerialInPlacePlusFunction, MulticoreInPlacePlusFunction, InPlaceMaxFunction, 
+                           SerialInPlaceMaxFunction, MulticoreInPlaceMaxFunction, OutofPlace, SerialOutofPlace,
+                           MulticoreOutofPlace );
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 //  Fixture classes are now defined to enable googletest to process value parameterized tests
@@ -243,7 +624,8 @@ TEST_P( ScanIntegerVector, InclusiveInplace )
 {
     //  Calling the actual functions under test
     std::vector< int >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
-    std::vector< int >::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ) );
+    std::vector< int >::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), 
+                                                                                    boltInput.begin( ) );
 
     //  The returned iterator should be one past the 
     EXPECT_EQ( stdInput.end( ), stdEnd );
@@ -259,11 +641,59 @@ TEST_P( ScanIntegerVector, InclusiveInplace )
     cmpArrays( stdInput, boltInput );
 }
 
+TEST_P( ScanIntegerVector, SerialInclusiveInplace )
+{
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    //  Calling the actual functions under test
+    std::vector< int >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
+    std::vector< int >::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin( ), boltInput.end( ), 
+                                                                                    boltInput.begin( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    std::vector< int >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< int >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+
+TEST_P( ScanIntegerVector, MulticoreInclusiveInplace )
+{
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    //  Calling the actual functions under test
+    std::vector< int >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
+    std::vector< int >::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin( ), boltInput.end( ), 
+                                                                                    boltInput.begin( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    std::vector< int >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< int >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+
+
 TEST_P( ScanFloatVector, InclusiveInplace )
 {
     //  Calling the actual functions under test
-    std::vector< float >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
-    std::vector< float >::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ) );
+    std::vector< float >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ),stdInput.begin());
+    std::vector< float >::iterator boltEnd =bolt::amp::inclusive_scan(boltInput.begin(),boltInput.end(),
+                                                                                    boltInput.begin());
 
     //  The returned iterator should be one past the 
     EXPECT_EQ( stdInput.end( ), stdEnd );
@@ -279,11 +709,109 @@ TEST_P( ScanFloatVector, InclusiveInplace )
     cmpArrays( stdInput, boltInput );
 }
 
+TEST_P( ScanFloatVector, SerialInclusiveInplace )
+{
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    //  Calling the actual functions under test
+    std::vector< float >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ),stdInput.begin());
+    std::vector< float >::iterator boltEnd =bolt::amp::inclusive_scan(ctl, boltInput.begin(),boltInput.end(),
+                                                                                    boltInput.begin());
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    std::vector< float >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< float >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+
+TEST_P( ScanFloatVector, MulticoreInclusiveInplace )
+{
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    //  Calling the actual functions under test
+    std::vector< float >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ),stdInput.begin());
+    std::vector< float >::iterator boltEnd =bolt::amp::inclusive_scan(ctl, boltInput.begin(),boltInput.end(),
+                                                                                    boltInput.begin());
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    std::vector< float >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< float >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+
+
+
+TEST_P( ScanFloatVector, OffsetInclusiveInplace )
+{
+
+    int length =  (int)std::distance(stdInput.begin( ),  stdInput.end( ));
+    //  Calling the actual functions under test
+    std::vector< float >::iterator stdEnd  = std::partial_sum( stdInput.begin( ) + (length/2), stdInput.end( ) - (length/4),stdInput.begin()+ (length/2));
+    std::vector< float >::iterator boltEnd = bolt::amp::inclusive_scan(boltInput.begin()+ (length/2),boltInput.end()- (length/4),
+                                                                                    boltInput.begin()+ (length/2));
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( )- (length/4), stdEnd );
+    EXPECT_EQ( boltInput.end( )- (length/4), boltEnd );
+
+    std::vector< float >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< float >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+
+
+
+#if(TEST_DOUBLE == 1)
+TEST_P( ScanDoubleVector, OffsetInclusiveInplace )
+{
+
+    int length =  (int)std::distance(stdInput.begin( ),  stdInput.end( ));
+    //  Calling the actual functions under test
+    std::vector< double >::iterator stdEnd  = std::partial_sum( stdInput.begin( ) + (length/2), stdInput.end( )- (length/4),stdInput.begin()+ (length/2));
+    std::vector< double >::iterator boltEnd =bolt::amp::inclusive_scan(boltInput.begin()+ (length/2),boltInput.end()- (length/4),
+                                                                                    boltInput.begin()+ (length/2));
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( )- (length/4), stdEnd );
+    EXPECT_EQ( boltInput.end( )- (length/4), boltEnd );
+
+    std::vector< double >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< double >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+
 TEST_P( ScanDoubleVector, InclusiveInplace )
 {
     //  Calling the actual functions under test
-    std::vector< double >::iterator stdEnd  = std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
-    std::vector< double >::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ) );
+    std::vector< double >::iterator stdEnd  = std::partial_sum( stdInput.begin( ),stdInput.end(),stdInput.begin());
+    std::vector< double >::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ),
+                                                                                         boltInput.begin( ) );
 
     //  The returned iterator should be one past the 
     EXPECT_EQ( stdInput.end( ), stdEnd );
@@ -299,12 +827,64 @@ TEST_P( ScanDoubleVector, InclusiveInplace )
     cmpArrays( stdInput, boltInput );
 }
 
+TEST_P( ScanDoubleVector, SerialInclusiveInplace )
+{
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    //  Calling the actual functions under test
+    std::vector< double >::iterator stdEnd  = std::partial_sum( stdInput.begin( ),stdInput.end(),stdInput.begin());
+    std::vector< double >::iterator boltEnd = bolt::amp::inclusive_scan( boltInput.begin( ), boltInput.end( ),
+                                                                                         boltInput.begin( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    std::vector< double >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< double >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+
+TEST_P( ScanDoubleVector, MulticoreInclusiveInplace )
+{
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    //  Calling the actual functions under test
+    std::vector< double >::iterator stdEnd  = std::partial_sum( stdInput.begin( ),stdInput.end(),stdInput.begin());
+    std::vector< double >::iterator boltEnd = bolt::amp::inclusive_scan(ctl, boltInput.begin( ), boltInput.end( ),
+                                                                                         boltInput.begin( ) );
+
+    //  The returned iterator should be one past the 
+    EXPECT_EQ( stdInput.end( ), stdEnd );
+    EXPECT_EQ( boltInput.end( ), boltEnd );
+
+    std::vector< double >::iterator::difference_type stdNumElements = std::distance( stdInput.begin( ), stdEnd );
+    std::vector< double >::iterator::difference_type boltNumElements = std::distance( boltInput.begin( ), boltEnd );
+
+    //  Both collections should have the same number of elements
+    EXPECT_EQ( stdNumElements, boltNumElements );
+
+    //  Loop through the array and compare all the values with each other
+    cmpArrays( stdInput, boltInput );
+}
+#endif
+
 //  Test lots of consecutive numbers, but small range, suitable for integers because they overflow easier
 INSTANTIATE_TEST_CASE_P( Inclusive, ScanIntegerVector, ::testing::Range( 0, 1024, 1 ) );
 
-//  Test a huge range, suitable for floating point as they are less prone to overflow (but floating point loses granularity at large values)
-INSTANTIATE_TEST_CASE_P( Inclusive, ScanFloatVector, ::testing::Range( 0, 1048576, 4096 ) );
-INSTANTIATE_TEST_CASE_P( Inclusive, ScanDoubleVector, ::testing::Range( 0, 1048576, 4096 ) );
+//#if TEST_LARGE_BUFFERS
+//  Test a huge range, suitable for floating point as they are less prone to overflow 
+// (but floating point loses granularity at large values)
+INSTANTIATE_TEST_CASE_P( Inclusive, ScanFloatVector, ::testing::Range( 0, 1048576, 74857  ) );
+#if(TEST_DOUBLE == 1)
+INSTANTIATE_TEST_CASE_P( Inclusive, ScanDoubleVector, ::testing::Range( 0, 1048576, 74857  ) );
+//#endif
+#endif
 
 typedef ::testing::Types< 
     std::tuple< int, TypeValue< 1 > >,
@@ -317,10 +897,13 @@ typedef ::testing::Types<
     std::tuple< int, TypeValue< 129 > >,
     std::tuple< int, TypeValue< 1000 > >,
     std::tuple< int, TypeValue< 1053 > >,
+	/*#if TEST_LARGE_BUFFERS
+	,*/
     std::tuple< int, TypeValue< 4096 > >,
     std::tuple< int, TypeValue< 4097 > >,
     std::tuple< int, TypeValue< 65535 > >,
     std::tuple< int, TypeValue< 65536 > >
+    //#endif
 > IntegerTests;
 
 typedef ::testing::Types< 
@@ -334,10 +917,13 @@ typedef ::testing::Types<
     std::tuple< float, TypeValue< 129 > >,
     std::tuple< float, TypeValue< 1000 > >,
     std::tuple< float, TypeValue< 1053 > >,
+	/*#if TEST_LARGE_BUFFERS
+	,*/
     std::tuple< float, TypeValue< 4096 > >,
     std::tuple< float, TypeValue< 4097 > >,
     std::tuple< float, TypeValue< 65535 > >,
     std::tuple< float, TypeValue< 65536 > >
+    //#endif
 > FloatTests;
 
 INSTANTIATE_TYPED_TEST_CASE_P( Integer, ScanArrayTest, IntegerTests );
@@ -428,248 +1014,977 @@ uddtM3 identityMixM3 = { 0, 0.f, 1.0 };
 uddtM3 initialMixM3  = { 1, 1, 1.000001 };
 
 
+TEST(OffsetTest, ExclOffsetTestUdd)
+{
+     //setup containers
+    int length = 1<<24;
+    std::vector< uddtI2 > input( length, initialAddI2  );
+   
+    std::vector< uddtI2 > refInput( length, initialAddI2  ); refInput[0] = initialAddI2;
+  
+    // call scan
+    AddI2 ai2;
 
+	bolt::amp::exclusive_scan( input.begin()+(length/2),    input.end()-(length/4),    input.begin()+(length/2), initialAddI2, ai2 );
+    ::std::partial_sum(refInput.begin()+(length/2), refInput.end()-(length/4), refInput.begin()+(length/2), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST(OffsetTest, SerialExclOffsetTestUdd)
+{
+     //setup containers
+    int length = 1<<24;
+    std::vector< uddtI2 > input( length, initialAddI2  );
+   
+    std::vector< uddtI2 > refInput( length, initialAddI2  ); refInput[0] = initialAddI2;
+  
+    // call scan
+    AddI2 ai2;
+  
+	bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+
+	bolt::amp::exclusive_scan( ctl, input.begin()+(length/2),    input.end()-(length/4),    input.begin()+(length/2), initialAddI2, ai2 );
+    ::std::partial_sum(refInput.begin()+(length/2), refInput.end()-(length/4), refInput.begin()+(length/2), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST(OffsetTest, MultiCoreExclOffsetTestUdd)
+{
+     //setup containers
+    int length = 1<<24;
+    std::vector< uddtI2 > input( length, initialAddI2  );
+   
+    std::vector< uddtI2 > refInput( length, initialAddI2  ); refInput[0] = initialAddI2;
+  
+    // call scan
+    AddI2 ai2;
+  
+	bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+
+	bolt::amp::exclusive_scan( ctl, input.begin()+(length/2),    input.end()-(length/4),    input.begin()+(length/2), initialAddI2, ai2 );
+    ::std::partial_sum(refInput.begin()+(length/2), refInput.end()-(length/4), refInput.begin()+(length/2), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST(InclusiveScan, InclUdd)
+{
+    //setup containers
+    int length = 1<<10;
+  
+    std::vector< uddtI2 > input( length, initialAddI2  );
+    //std::vector< uddtI2 > output( length);
+    std::vector< uddtI2 > refInput( length, initialAddI2  );
+    //std::vector< uddtI2 > refOutput( length);
+
+    // call scan
+    AddI2 ai2;
+    //bolt::amp::inclusive_scan( input.begin(), input.end(), output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan( input.begin(), input.end(), input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST(InclusiveScan, SerialInclUdd)
+{
+    //setup containers
+    int length = 1<<10;
+  
+    std::vector< uddtI2 > input( length, initialAddI2  );
+    //std::vector< uddtI2 > output( length);
+    std::vector< uddtI2 > refInput( length, initialAddI2  );
+    //std::vector< uddtI2 > refOutput( length);
+ 
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    // call scan
+    AddI2 ai2;
+    //bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan(ctl, input.begin(), input.end(), input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
 
 TEST(InclusiveScan, MulticoreInclUdd)
 {
     //setup containers
-    int length = 1<<18;
+    int length = 1<<10;
   
     std::vector< uddtI2 > input( length, initialAddI2  );
-    std::vector< uddtI2 > output( length);
+    //std::vector< uddtI2 > output( length);
     std::vector< uddtI2 > refInput( length, initialAddI2  );
-    std::vector< uddtI2 > refOutput( length);
+    //std::vector< uddtI2 > refOutput( length);
  
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
     // call scan
     AddI2 ai2;
-    bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
-    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan(ctl, input.begin(), input.end(), input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+} 
+
+TEST (sanity_exclusive_scan__simple_epr377210, withIntWiCtrl)
+{
+	int myStdArray[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+	int myBoltArray[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+	
+	//TAKE_AMP_CONTROL_PATH
+	bolt::amp::control& my_amp_ctl= bolt::amp::control::getDefault();
+	my_amp_ctl.setForceRunMode(bolt::amp::control::Automatic);
+	
+	bolt::amp::exclusive_scan(my_amp_ctl, myBoltArray, myBoltArray + 10, myBoltArray);
+	::std::partial_sum(myStdArray, myStdArray + 10, myStdArray);
+
+	for (int i = 1; i < 10; i++){
+	   EXPECT_EQ (myStdArray[i-1], myBoltArray[i]);
+	}
+}
+
+TEST (sanity_exclusive_scan__dev_vector, intsWo_Ctrl){
+
+bolt::amp::device_vector< int > boltInput( 1024, 1 );
+std::vector< int > stdInput( 1024, 1 );
+
+//TAKE_AMP_CONTROL_PATH
+
+bolt::amp::exclusive_scan( boltInput.begin( ), boltInput.end( ), boltInput.begin( ));
+std::partial_sum( stdInput.begin( ), stdInput.end( ), stdInput.begin( ) );
+
+for (int i = 1; i < 1024; i++){
+EXPECT_EQ(stdInput[i-1], boltInput[i]);
+}
+
+}
+
+TEST (sanity_exclusive_scan__diff_cont2, unsigInt){
+//TAKE_AMP_CONTROL_PATH
+bolt::amp::control& my_amp_ctl= bolt::amp::control::getDefault();
+my_amp_ctl.setForceRunMode(bolt::amp::control::Automatic);
+
+int size = 1024;
+bolt::amp::device_vector< unsigned int > boltInput( size, 5 );
+bolt::amp::device_vector< unsigned int >::iterator boltEnd = bolt::amp::exclusive_scan( my_amp_ctl, boltInput.begin( ), boltInput.end( ), boltInput.begin( ), 2);
+
+std::vector< unsigned int > stdInput( size, 5);
+std::vector< unsigned int >::iterator stdEnd = bolt::amp::exclusive_scan( stdInput.begin( ), stdInput.end( ), stdInput.begin( ), 2);
+
+EXPECT_EQ((*(boltEnd-1)), (*(stdEnd-1)));	
+}
+
+TEST (sanity_exclusive_scan__diff_cont, floatSameValuesSerialRange){
+//TAKE_AMP_CONTROL_PATH
+bolt::amp::control& my_amp_ctl= bolt::amp::control::getDefault();
+my_amp_ctl.setForceRunMode(bolt::amp::control::Automatic);
+
+int size = 1024;
+bolt::amp::device_vector< float > boltInput( size, 1.125f );
+bolt::amp::device_vector< float >::iterator boltEnd = bolt::amp::exclusive_scan( my_amp_ctl, boltInput.begin( ), boltInput.end( ), boltInput.begin( ), 2.0f);
+
+std::vector< float > stdInput( size, 1.125f);
+std::vector< float >::iterator stdEnd = bolt::amp::exclusive_scan( stdInput.begin( ), stdInput.end( ), stdInput.begin( ), 2.0f );
+
+EXPECT_FLOAT_EQ((*(boltEnd-1)), (*(stdEnd-1)));	
+}
+
+#if (TEST_DOUBLE==1)
+TEST (sanity_exclusive_scan___stdVectVsDeviceVectWithIters_d, floatSameValuesSerialRange){
+//TAKE_AMP_CONTROL_PATH
+bolt::amp::control& my_amp_ctl= bolt::amp::control::getDefault();
+my_amp_ctl.setForceRunMode(bolt::amp::control::Automatic);
+
+int size = 1024;
+bolt::amp::device_vector< double > boltInput( size, 6.0625 );
+bolt::amp::device_vector< double >::iterator boltEnd = bolt::amp::exclusive_scan( my_amp_ctl, boltInput.begin( ), boltInput.end( ), boltInput.begin( ), 1.125 );
+
+std::vector< double > stdInput( size, 6.0625);
+std::vector< double >::iterator stdEnd = bolt::amp::exclusive_scan( stdInput.begin( ), stdInput.end( ), stdInput.begin( ), 1.125);
+
+EXPECT_DOUBLE_EQ((*(boltEnd-1)), (*(stdEnd-1)));	
+} 
+#endif
+
+TEST(InclusiveScan, InclFloat)
+{
+    //setup containers
+
+    int length = 1<<10;
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.0f+rand()%3;
+        refInput[i] = input[i];
+    }
+    // call scan
+    bolt::amp::plus<float> ai2;
+    //bolt::amp::inclusive_scan( input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan( input.begin(),    input.end(),    input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST(InclusiveScan, SerialInclFloat)
+{
+    //setup containers
+
+    int length = 1<<10;
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.0f+rand()%3;
+        refInput[i] = input[i];
+    }
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu); 
+    // call scan
+    bolt::amp::plus<float> ai2;
+    //bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
 } 
 
 TEST(InclusiveScan, MulticoreInclFloat)
 {
     //setup containers
 
-    int length = 1<<18;
+    int length = 1<<10;
     std::vector< float > input( length);
-    std::vector< float > output( length);
+    //std::vector< float > output( length);
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
+    //std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 1;
-        refInput[i] = 1;
+        input[i] = 1.0f+rand()%3;
+        refInput[i] = input[i];
     }
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
-    // call scan
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu); 
     bolt::amp::plus<float> ai2;
-    bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
-    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan( input.begin(),    input.end(),    input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+} 
+
+#if(TEST_DOUBLE ==1)
+TEST(InclusiveScan, IncluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+    std::vector< uddtM3 > input( length, initialMixM3  );
+    //std::vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  );
+    //std::vector< uddtM3 > refOutput( length);
+    // call scan
+    MixM3 M3;
+   /* bolt::amp::inclusive_scan( input.begin(),    input.end(),    output.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
+    
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::inclusive_scan( input.begin(),    input.end(),    input.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    cmpArrays(refInput, input);  
+} 
+
+TEST(InclusiveScan, SerialIncluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+    std::vector< uddtM3 > input( length, initialMixM3  );
+    //std::vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  );
+    //std::vector< uddtM3 > refOutput( length);
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    // call scan
+    MixM3 M3;
+   /* bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
+    
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::inclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    cmpArrays(refInput, input);  
 } 
 
 TEST(InclusiveScan, MulticoreIncluddtM3)
 {
     //setup containers
-    int length = 1<<18;
+    int length = 1<<10;
     std::vector< uddtM3 > input( length, initialMixM3  );
-    std::vector< uddtM3 > output( length);
+    //std::vector< uddtM3 > output( length);
     std::vector< uddtM3 > refInput( length, initialMixM3  );
-    std::vector< uddtM3 > refOutput( length);
+    //std::vector< uddtM3 > refOutput( length);
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu); // tested with serial also
     // call scan
     MixM3 M3;
-    bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), M3 );
+   /* bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), M3 );
     ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
     
-    cmpArrays(refOutput, output);  
-} 
+    cmpArrays(refOutput, output);  */
 
+	bolt::amp::inclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    cmpArrays(refInput, input);  
+} 
+#endif
+
+TEST(ExclusiveScan, ExclUdd)
+{
+    //setup containers
+    int length = 1<<10;
+    std::vector< uddtI2 > input( length, initialAddI2  );
+    //std::vector< uddtI2 > output( length);
+    std::vector< uddtI2 > refInput( length, initialAddI2  ); refInput[0] = initialAddI2;
+    //std::vector< uddtI2 > refOutput( length);
+    // call scan
+    AddI2 ai2;
+    //bolt::amp::exclusive_scan( input.begin(),    input.end(),    output.begin(), initialAddI2, ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::exclusive_scan( input.begin(),    input.end(),    input.begin(), initialAddI2, ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+TEST(ExclusiveScan, SerialExclUdd)
+{
+    //setup containers
+    int length = 1<<10;
+    std::vector< uddtI2 > input( length, initialAddI2  );
+    //std::vector< uddtI2 > output( length);
+    std::vector< uddtI2 > refInput( length, initialAddI2  ); refInput[0] = initialAddI2;
+    //std::vector< uddtI2 > refOutput( length);
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu); 
+    // call scan
+    AddI2 ai2;
+    //bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialAddI2, ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::exclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), initialAddI2, ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+}
 
 TEST(ExclusiveScan, MulticoreExclUdd)
 {
     //setup containers
-    int length = 1<<18;
+    int length = 1<<10;
     std::vector< uddtI2 > input( length, initialAddI2  );
-    std::vector< uddtI2 > output( length);
+    //std::vector< uddtI2 > output( length);
     std::vector< uddtI2 > refInput( length, initialAddI2  ); refInput[0] = initialAddI2;
-    std::vector< uddtI2 > refOutput( length);
+    //std::vector< uddtI2 > refOutput( length);
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
-    // call scan
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
     AddI2 ai2;
-    bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialAddI2, ai2 );
-   // bolt::cl::exclusive_scan(refInput.begin(),    refInput.end(),    refOutput.begin(), initialAddI2, ai2 );
-    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialAddI2, ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::exclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), initialAddI2, ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
 
-TEST(ExclusiveScan, MulticoreExclFloat)
+
+TEST(ExclusiveScan, ExclFloat)
 {
     //setup containers
-    int length = 1<<18;
+    int length = 1<<10;
     std::vector< float > input( length);
-    std::vector< float > output( length);
+    //std::vector< float > output( length);
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
+    //std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 2.0f;
+        input[i] = 1.0f+rand()%3;
         if(i != length-1)
-           refInput[i+1] = 2.0f;
+           refInput[i+1] = input[i];
+        //refInput[i] = 2.0f;
+    }
+    refInput[0] = 3.0f;
+    // call scan
+    bolt::amp::plus<float> ai2;
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::exclusive_scan( input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    bolt::amp::exclusive_scan( input.begin(),    input.end(),    input.begin(), 3.0f, ai2 );
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST(ExclusiveScan, SerialExclFloat)
+{
+    //setup containers
+    int length = 1<<10;
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.0f+rand()%3;
+        if(i != length-1)
+           refInput[i+1] = input[i];
         //refInput[i] = 2.0f;
     }
     refInput[0] = 3.0f;
 
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
     // call scan
     bolt::amp::plus<float> ai2;
-    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
-    bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+    //// compare results
+    //cmpArrays(refOutput, output);
 
+	::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    bolt::amp::exclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), 3.0f, ai2 );
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
+} 
+
+TEST(ExclusiveScan, MulticoreExclFloat)
+{
+    //setup containers
+    int length = 1<<10;
+    std::vector< float > input( length);
+    //std::vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.0f+rand()%3;
+        if(i != length-1)
+           refInput[i+1] = input[i];
+        //refInput[i] = 2.0f;
+    }
+    refInput[0] = 3.0f;
+
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu); 
+    bolt::amp::plus<float> ai2;
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    input.begin(), 3.0f, ai2 );
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+#if(TEST_DOUBLE ==1)
+TEST(ExclusiveScan, ExcluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+  
+    std::vector< uddtM3 > input( length, initialMixM3  );
+    //std::vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  ); refInput[0] = initialMixM3;
+    //std::vector< uddtM3 > refOutput( length);
+    // call scan
+    MixM3 M3;
+   /* bolt::amp::exclusive_scan(  input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
+    
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::exclusive_scan(  input.begin(),    input.end(),    input.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);  
+    cmpArrays(refInput, input);  
+} 
+
+TEST(ExclusiveScan, SerialExcluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+  
+    std::vector< uddtM3 > input( length, initialMixM3  );
+    //std::vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  ); refInput[0] = initialMixM3;
+    //std::vector< uddtM3 > refOutput( length);
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    // call scan
+    MixM3 M3;
+    /*bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::exclusive_scan(  ctl, input.begin(),    input.end(),    input.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);  
+    cmpArrays(refInput, input);  
 } 
 
 TEST(ExclusiveScan, MulticoreExcluddtM3)
 {
     //setup containers
-    int length = 1<<18;
+    int length = 1<<10;
   
     std::vector< uddtM3 > input( length, initialMixM3  );
-    std::vector< uddtM3 > output( length);
+    //std::vector< uddtM3 > output( length);
     std::vector< uddtM3 > refInput( length, initialMixM3  ); refInput[0] = initialMixM3;
-    std::vector< uddtM3 > refOutput( length);
+    //std::vector< uddtM3 > refOutput( length);
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
-    // call scan
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu); 
     MixM3 M3;
-    bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
-    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
-    
-    cmpArrays(refOutput, output);  
+    /*bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);  
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::exclusive_scan(  ctl, input.begin(),    input.end(),    input.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);  
+    cmpArrays(refInput, input);  
 } 
-
+#endif
 ///////////////////////////////////////////////Device vectorTBB and serial path test///////////////////
-
 
 
 TEST(InclusiveScan, DeviceVectorInclFloat)
 {
-    size_t length = 1<<16;
+    int length = 1<<10;
    
-    bolt::amp::device_vector< float > input(length);
-    bolt::amp::device_vector< float > output(length);
+    //bolt::amp::device_vector< float > input(length);
+    //bolt::amp::device_vector< float > output(length);
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
+    //std::vector< float > refOutput( length);
+   
+   for(int i=0; i<length; i++) {
+        refInput[i] = 1.0f + rand()%3;
+    }
+	bolt::amp::device_vector< float > input(refInput.begin(), refInput.end());
+   //  bolt::amp::device_vector< float > input(refInput.begin(), length);
+   //  bolt::amp::device_vector< float > output( refOutput.begin(), length);
+
+    // call scan
+    bolt::amp::plus<float> ai2;
+    //bolt::amp::inclusive_scan( input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan( input.begin(),    input.end(),    input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
+TEST(InclusiveScan, SerialDeviceVectorInclFloat)
+{
+    int length = 1<<10;
+   
+    //bolt::amp::device_vector< float > input(length);
+    //bolt::amp::device_vector< float > output(length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
    
     for(int i=0; i<length; i++) {
-        input[i] = 2.f;
-        refInput[i] = 2.f;
+        refInput[i] = 1.0f + rand()%3;
     }
-//    bolt::amp::device_vector< float > input(refInput.begin(), length);
+	bolt::amp::device_vector< float > input(refInput.begin(), refInput.end());
+
+  //  bolt::amp::device_vector< float > input(refInput.begin(), length);
   //  bolt::amp::device_vector< float > output( refOutput.begin(), length);
 
 
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
     // call scan
     bolt::amp::plus<float> ai2;
-    bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
-    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 } 
+
+TEST(InclusiveScan, MulticoreDeviceVectorInclFloat)
+{
+    int length = 1<<10;
+   
+    //bolt::amp::device_vector< float > output(length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+   
+    for(int i=0; i<length; i++) {
+        refInput[i] = 1.0f + rand()%3;
+    }
+	bolt::amp::device_vector< float > input(refInput.begin(), refInput.end());
+
+  // bolt::amp::device_vector< float > input(refInput.begin(), length);
+  //  bolt::amp::device_vector< float > output( refOutput.begin(), length);
+
+
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu); 
+    bolt::amp::plus<float> ai2;
+    //bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	bolt::amp::inclusive_scan( input.begin(),    input.end(),    input.begin(), ai2 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    // compare results
+    cmpArrays(refInput, input);
+} 
+
 
 
 TEST(InclusiveScan, DeviceVectorIncluddtM3)
 {
     //setup containers
-    size_t length = 1<<16;
+    int length = 1<<10;
     bolt::amp::device_vector< uddtM3 > input( length, initialMixM3  );
-    bolt::amp::device_vector< uddtM3 > output( length);
+    //bolt::amp::device_vector< uddtM3 > output( length);
     std::vector< uddtM3 > refInput( length, initialMixM3  );
-    std::vector< uddtM3 > refOutput( length);
-
-    bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
+    //std::vector< uddtM3 > refOutput( length);
     // call scan
     MixM3 M3;
-    bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), M3 );
+    /*bolt::amp::inclusive_scan( input.begin(),    input.end(),    output.begin(), M3 );
     ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
     
-    cmpArrays(refOutput, output);  
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::inclusive_scan( input.begin(),    input.end(),    input.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    cmpArrays(refInput, input);  
 } 
+
+TEST(InclusiveScan, SerialDeviceVectorIncluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+    bolt::amp::device_vector< uddtM3 > input( length, initialMixM3  );
+    //bolt::amp::device_vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  );
+    //std::vector< uddtM3 > refOutput( length);
+
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu);
+    // call scan
+    MixM3 M3;
+/*    bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3); 
+    cmpArrays(refOutput, output); */ 
+
+	bolt::amp::inclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    cmpArrays(refInput, input);
+} 
+
+TEST(InclusiveScan, MulticoreDeviceVectorIncluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+    bolt::amp::device_vector< uddtM3 > input( length, initialMixM3  );
+    //bolt::amp::device_vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  );
+    //std::vector< uddtM3 > refOutput( length);
+
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu); 
+    MixM3 M3;
+   /* bolt::amp::inclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3); 
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::inclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    cmpArrays(refInput, input);
+} 
+
 
 
 TEST(ExclusiveScan, DeviceVectorExclFloat)
 {
     //setup containers
-    size_t length = 1<<16;
+    int length = 1<<10;
     bolt::amp::device_vector< float > input( length);
-    bolt::amp::device_vector< float > output( length);
+    //bolt::amp::device_vector< float > output( length);
     std::vector< float > refInput( length);
-    std::vector< float > refOutput( length);
+    //std::vector< float > refOutput( length);
     for(int i=0; i<length; i++) {
-        input[i] = 2.0f;
+        input[i] = 1.0f + rand()%3;
         if(i != length-1)
-           refInput[i+1] = 2.0f;
+           refInput[i+1] = input[i];
+        //refInput[i] = 2.0f;
+    }
+    refInput[0] = 3.0f;
+
+    // call scan
+    bolt::amp::plus<float> ai2;
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::exclusive_scan( input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    bolt::amp::exclusive_scan( input.begin(),    input.end(),    input.begin(), 3.0f, ai2 );
+
+    // compare results
+    cmpArrays(refInput, input);
+}
+
+TEST(ExclusiveScan, SerialDeviceVectorExclFloat)
+{
+    //setup containers
+    int length = 1<<10;
+    bolt::amp::device_vector< float > input( length);
+    //bolt::amp::device_vector< float > output( length);
+    std::vector< float > refInput( length);
+    //std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.0f + rand()%3;
+        if(i != length-1)
+           refInput[i+1] = input[i];
         //refInput[i] = 2.0f;
     }
     refInput[0] = 3.0f;
 
     bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu); 
     // call scan
     bolt::amp::plus<float> ai2;
-    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
-    bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    bolt::amp::exclusive_scan(ctl, input.begin(),    input.end(),    input.begin(), 3.0f, ai2 );
 
     // compare results
-    cmpArrays(refOutput, output);
+    cmpArrays(refInput, input);
 }
+
+TEST(ExclusiveScan, MulticoreDeviceVectorExclFloat)
+{
+    //setup containers
+    int length = 1<<10;
+    bolt::amp::device_vector< float > input( length);
+    //bolt::amp::device_vector< float > output( length);
+    std::vector< float > refInput( length);
+   // std::vector< float > refOutput( length);
+    for(int i=0; i<length; i++) {
+        input[i] = 1.0f + rand()%3;
+        if(i != length-1)
+           refInput[i+1] = input[i];
+        //refInput[i] = 2.0f;
+    }
+    refInput[0] = 3.0f;
+
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    // call scan
+    bolt::amp::plus<float> ai2;
+    //::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), ai2);
+    //bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), 3.0f, ai2 );
+
+    //// compare results
+    //cmpArrays(refOutput, output);
+
+	
+	::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), ai2);
+    bolt::amp::exclusive_scan(ctl, input.begin(),    input.end(),    input.begin(), 3.0f, ai2 );
+
+    // compare results
+    cmpArrays(refInput, input);
+}
+
 
 
 TEST(ExclusiveScan, DeviceVectorExcluddtM3)
 {
     //setup containers
-    size_t length = 1<<16;
+    int length = 1<<10;
   
     bolt::amp::device_vector< uddtM3 > input( length, initialMixM3  );
-    bolt::amp::device_vector< uddtM3 > output( length);
+    //bolt::amp::device_vector< uddtM3 > output( length);
     std::vector< uddtM3 > refInput( length, initialMixM3  ); refInput[0] = initialMixM3;
-    std::vector< uddtM3 > refOutput( length);
-    bolt::amp::control ctl = bolt::amp::control::getDefault( );
-    ctl.setForceRunMode(bolt::amp::control::SerialCpu); // tested with serial also
+    //std::vector< uddtM3 > refOutput( length);
     // call scan
     MixM3 M3;
-    bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
+   /* bolt::amp::exclusive_scan( input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
     ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
     
-    cmpArrays(refOutput, output);  
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::exclusive_scan( input.begin(),    input.end(),    input.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    
+    cmpArrays(refInput, input);  
 } 
 
+TEST(ExclusiveScan, SerialDeviceVectorExcluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+  
+    bolt::amp::device_vector< uddtM3 > input( length, initialMixM3  );
+    //bolt::amp::device_vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  ); refInput[0] = initialMixM3;
+    //std::vector< uddtM3 > refOutput( length);
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::SerialCpu); 
+    // call scan
+    MixM3 M3;
+    /*bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
+    
+    cmpArrays(refOutput, output);  */
+
+	bolt::amp::exclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    
+    cmpArrays(refInput, input);  
+} 
+
+TEST(ExclusiveScan, MulticoreDeviceVectorExcluddtM3)
+{
+    //setup containers
+    int length = 1<<10;
+  
+    bolt::amp::device_vector< uddtM3 > input( length, initialMixM3  );
+    //bolt::amp::device_vector< uddtM3 > output( length);
+    std::vector< uddtM3 > refInput( length, initialMixM3  ); refInput[0] = initialMixM3;
+    //std::vector< uddtM3 > refOutput( length);
+    bolt::amp::control ctl = bolt::amp::control::getDefault( );
+    ctl.setForceRunMode(bolt::amp::control::MultiCoreCpu);
+    MixM3 M3;
+    /*bolt::amp::exclusive_scan( ctl,  input.begin(),    input.end(),    output.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refOutput.begin(), M3);
+    
+    cmpArrays(refOutput, output); */ 
+
+	bolt::amp::exclusive_scan( ctl, input.begin(),    input.end(),    input.begin(), initialMixM3, M3 );
+    ::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), M3);
+    
+    cmpArrays(refInput, input);  
+} 
+
+
+TEST(AMPTileLimitTest, AMPTileLimitTest)
+{
+    //setup containers
+    for(int i=24 ; i<28; i++)
+	{
+		int size = 1<<i;
+		bolt::amp::device_vector< int > input( size, 2 );
+		std::vector< int > refInput( size, 2 );  refInput[0] = 2;
+		bolt::amp::exclusive_scan( input.begin(),    input.end(),    input.begin(), 2, bolt::amp::plus<int>() );
+		::std::partial_sum(refInput.begin(), refInput.end(), refInput.begin(), bolt::amp::plus<int>());
+		cmpArrays(refInput, input);  
+	}
+} 
+
+TEST(ScanByKeyEPR392210, constant_iterator)
+{
+    const int length = 1<<10;
+
+    int value = 100;
+    std::vector< int > svInVec1( length );
+    std::vector< int > svInVec2( length );
+    
+    std::vector< int > svOutVec( length );
+    std::vector< int > stlOut( length );
+
+    bolt::amp::device_vector< int > dvInVec1( length );
+    bolt::amp::device_vector< int > dvOutVec( length );
+
+    bolt::amp::constant_iterator<int> constIter1 (value);
+    bolt::amp::constant_iterator<int> constIter2 (10);
+
+    bolt::amp::plus<int> pls;
+    int n = (int) 1 + rand()%10;
+
+    bolt::amp::control ctl;
+    ctl.setForceRunMode( bolt::amp::control::SerialCpu );
+    bolt::amp::inclusive_scan( ctl, constIter1, constIter1 + length, dvOutVec.begin(), pls );
+    
+    std::vector<int> const_vector(length,value);
+    std::partial_sum(const_vector.begin(), const_vector.end(), stlOut.begin(), pls);
+    
+    for(int i =0; i< length; i++)
+    {
+      EXPECT_EQ( dvOutVec[i], stlOut[i]);
+    }
+}
 
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
-    std::cout << "#######################################################################################" << std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
+    std::cout << "#######################################################################################" <<std::endl;
 
     ::testing::InitGoogleTest( &argc, &argv[ 0 ] );
 
@@ -698,7 +2013,7 @@ int _tmain(int argc, _TCHAR* argv[])
     {
         bolt::tout << _T( "\nFailed tests detected in test pass; please run test again with:" ) << std::endl;
         bolt::tout << _T( "\t--gtest_filter=<XXX> to select a specific failing test of interest" ) << std::endl;
-        bolt::tout << _T( "\t--gtest_catch_exceptions=0 to generate minidump of failing test, or" ) << std::endl;
+        bolt::tout << _T( "\t--gtest_catch_exceptions=0 to generate minidump of failing test, or" ) << std::endl;      
         bolt::tout << _T( "\t--gtest_break_on_failure to debug interactively with debugger" ) << std::endl;
         bolt::tout << _T( "\t    (only on googletest assertion failures, not SEH exceptions)" ) << std::endl;
     }

@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -13,15 +13,18 @@
 *   See the License for the specific language governing permissions and              
 *   limitations under the License.                                                   
 ***************************************************************************/
-template < typename T, typename Type >
+template < typename T, typename Type, typename iIterType >
 __kernel
 void fill_kernel(
     const T src,
     global Type * dst,
+	iIterType input_iter,
     const uint numElements )
 {
+    input_iter.init(dst);
+
     size_t gloId = get_global_id( 0 );
     if( gloId >= numElements ) return; // on SI this doesn't mess-up barriers
     
-    dst[ gloId ] = src;
+	input_iter[ gloId ] = src;
 };

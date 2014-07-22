@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -60,13 +60,15 @@ if( MSVC )
         set(TBB_COMPILER "vc10")
     else( )
         set(TBB_COMPILER "vc11")
-    endif( )
-endif( )
+    endif()	
+elseif(UNIX)
+	set(TBB_COMPILER "gcc4.4")
+endif()
 
 if ( NOT TBB_ROOT )
     set(TBB_ROOT $ENV{TBB_ROOT})
 endif( )
-message ("TBB_ROOT:" ${TBB_ROOT} )
+message ( STATUS "TBB_ROOT:" ${TBB_ROOT} )
 if ( NOT TBB_ROOT )
     message( "TBB install not found in the system.")
 else ( ) 
@@ -79,6 +81,7 @@ else ( )
         set(TBB_ARCH_PLATFORM ia32)
     endif( )    
     
+    message ( STATUS "TBB_LIB: " ${LIB64} )
 
     #Find TBB header files
     find_path( TBB_INCLUDE_DIRS 
@@ -87,7 +90,7 @@ else ( )
         DOC "TBB header file path"
     )
     mark_as_advanced( TBB_INCLUDE_DIRS )
-    message ("TBB_INCLUDE_DIRS: " ${TBB_INCLUDE_DIRS} )
+    message ( STATUS "TBB_INCLUDE_DIRS: " ${TBB_INCLUDE_DIRS} )
     
     #Find TBB Libraries
     set (_TBB_LIBRARY_DIR ${TBB_ROOT}/lib/${TBB_ARCH_PLATFORM} )
@@ -100,10 +103,10 @@ else ( )
     find_library(TBB_MALLOC_LIBRARY_DEBUG ${_TBB_LIB_MALLOC_DEBUG_NAME} HINTS ${_TBB_LIBRARY_DIR}/${TBB_COMPILER}
                 PATHS ENV LIBRARY_PATH ENV LD_LIBRARY_PATH)        
 
-    message ("TBB_LIBRARY:" ${TBB_LIBRARY})
-    message ("TBB_MALLOC_LIBRARY:" ${TBB_MALLOC_LIBRARY})
-    message ("TBB_LIBRARY_DEBUG:" ${TBB_LIBRARY_DEBUG})
-    message ("TBB_MALLOC_LIBRARY_DEBUG:" ${TBB_MALLOC_LIBRARY_DEBUG})
+    message ( STATUS "TBB_LIBRARY:" ${TBB_LIBRARY})
+    message ( STATUS "TBB_MALLOC_LIBRARY:" ${TBB_MALLOC_LIBRARY})
+    message ( STATUS "TBB_LIBRARY_DEBUG:" ${TBB_LIBRARY_DEBUG})
+    message ( STATUS "TBB_MALLOC_LIBRARY_DEBUG:" ${TBB_MALLOC_LIBRARY_DEBUG})
 
     mark_as_advanced( TBB_LIBRARY )
     mark_as_advanced( TBB_MALLOC_LIBRARY )
@@ -111,7 +114,7 @@ else ( )
     mark_as_advanced( TBB_MALLOC_LIBRARY_DEBUG )
 
     mark_as_advanced( TBB_ROOT )
-    message ( "TBB_ROOT: "${TBB_ROOT} )
+    message ( STATUS "TBB_ROOT: " ${TBB_ROOT} )
 
     include( FindPackageHandleStandardArgs )
     FIND_PACKAGE_HANDLE_STANDARD_ARGS( TBB DEFAULT_MSG TBB_LIBRARY TBB_MALLOC_LIBRARY TBB_LIBRARY_DEBUG TBB_MALLOC_LIBRARY_DEBUG TBB_INCLUDE_DIRS TBB_ROOT)
