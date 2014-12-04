@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -155,6 +155,14 @@ namespace bolt
 					   InputIterator2 first2,
 					   OutputIterator result,
 					   BinaryFunction op);
+
+
+
+		template<typename InputIterator1, typename InputIterator2, typename Stencil, typename OutputIterator, typename BinaryFunction, typename Predicate>
+		void transform_if(InputIterator1 first1, InputIterator1 last1,
+                        InputIterator2 first2,  Stencil& s, OutputIterator result, BinaryFunction f, Predicate p);
+        
+
 	 /*!   \}  */
 
 	}//tbb namespace ends

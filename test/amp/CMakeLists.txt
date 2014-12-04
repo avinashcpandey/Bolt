@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 - 2013 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -49,10 +49,12 @@ include_directories(
 
 add_subdirectory( BinarySearchTest )
 add_subdirectory( PairTest )
+add_subdirectory( ForEachTest )
 add_subdirectory( GenerateTest )
 add_subdirectory( FillTest )
 add_subdirectory( InnerProductTest )
 add_subdirectory( CopyTest )
+add_subdirectory( CopyIfTest )
 add_subdirectory( MinElementTest )
 add_subdirectory( MergeTest )
 add_subdirectory( MaxElementTest )
@@ -66,10 +68,16 @@ add_subdirectory( SortTest )
 add_subdirectory( SortByKeyTest )
 add_subdirectory( StableSortTest )
 add_subdirectory( StableSortByKeyTest )
-add_subdirectory( TransformTest )   
+add_subdirectory( TransformTest )
+add_subdirectory( ReplaceTest )
+add_subdirectory( RemoveTest )
+add_subdirectory( TransformIteratorTest )
 add_subdirectory( TransformReduceTest )
 add_subdirectory( TransformScanTest )
 add_subdirectory( ScatterTest )
 add_subdirectory( GatherTest )
+add_subdirectory( UniqueTest )
+add_subdirectory( LogicalTest )
 add_subdirectory( device_vector )
+add_subdirectory( FindTest )
 

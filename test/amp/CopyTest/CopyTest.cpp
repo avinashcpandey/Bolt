@@ -1,5 +1,5 @@
 /***************************************************************************                                                                                     
-*   Copyright 2012 - 2013 Advanced Micro Devices, Inc.                                     
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 *                                                                                    
 *   Licensed under the Apache License, Version 2.0 (the "License");   
 *   you may not use this file except in compliance with the License.                 
@@ -2817,11 +2817,16 @@ TEST(Copy, MultiCoreFancyRandomIntFloat)
 
 int main(int argc, char* argv[])
 {
-    //  Register our minidump generating logic
+    
+    bool can_use_doubles = concurrency::accelerator().supports_double_precision;
+    std::cout << "can_use_doubles = " << can_use_doubles << "\n";
+
+
+    //Register our minidump generating logic
 #if defined(_WIN32)
     bolt::miniDumpSingleton::enableMiniDumps( );
 #endif
-
+    
     // Define MEMORYREPORT on windows platfroms to enable debug memory heap checking
 #if defined( MEMORYREPORT ) && defined( _WIN32 )
     TCHAR logPath[ MAX_PATH ];

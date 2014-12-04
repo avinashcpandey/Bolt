@@ -1,5 +1,5 @@
 ############################################################################
-#   Copyright 2012 - 2013 Advanced Micro Devices, Inc.
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -170,6 +170,7 @@ set( clBolt.Runtime.clFiles
         sort_uint_kernels.cl
         sort_by_key_uint_kernels.cl
         sort_int_kernels.cl
+        sort_float_kernels.cl
         sort_by_key_int_kernels.cl
         sort_by_key_kernels.cl
     )
@@ -195,6 +196,8 @@ set( tbb.Runtime.Headers
     ${tbb.Include.Dir}/stable_sort_by_key.h
     ${tbb.Include.Dir}/transform.h
     ${tbb.Include.Dir}/transform_reduce.h
+	${tbb.Include.Dir}/for_each.h
+	${tbb.Include.Dir}/find.h
     )
 
 set( tbb.Runtime.Headers.Detail
@@ -218,6 +221,8 @@ set( tbb.Runtime.Headers.Detail
     ${tbb.Include.Dir}/detail/stable_sort_by_key.inl
     ${tbb.Include.Dir}/detail/transform.inl
     ${tbb.Include.Dir}/detail/transform_reduce.inl
+	${tbb.Include.Dir}/detail/for_each.inl
+	${tbb.Include.Dir}/detail/find.inl
     )
 
 # Create a list of .cl files that we would like to be a part of the IDE

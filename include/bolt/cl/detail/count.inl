@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 - 2013 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -370,7 +370,7 @@ namespace cl{
 
 	}
 
-
+	//TODO won't work for transform iterator with std::vectors...come back and fix it
 	template<typename InputIterator, typename Predicate>
     typename bolt::cl::iterator_traits<InputIterator>::difference_type
         count(bolt::cl::control &ctl,

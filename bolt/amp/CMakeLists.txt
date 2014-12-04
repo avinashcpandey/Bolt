@@ -1,5 +1,5 @@
 ############################################################################                                                                                     
-#   Copyright 2012 - 2013 Advanced Micro Devices, Inc.                                     
+#   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.                                     
 #                                                                                    
 #   Licensed under the Apache License, Version 2.0 (the "License");   
 #   you may not use this file except in compliance with the License.                 
@@ -57,12 +57,20 @@ set( ampBolt.Runtime.Headers
 	${ampBolt.Include.Dir}/transform_reduce.h 
 	${ampBolt.Include.Dir}/transform_reduce_range.h
 	${ampBolt.Include.Dir}/transform_scan.h
+	${ampBolt.Include.Dir}/replace.h
+	${ampBolt.Include.Dir}/remove.h
+	${ampBolt.Include.Dir}/for_each.h
+	${ampBolt.Include.Dir}/unique.h
+	${ampBolt.Include.Dir}/logical.h
+	${ampBolt.Include.Dir}/find.h
     )
 set( ampBolt.Runtime.Headers.Iterator
+	${ampBolt.Include.Dir}/iterator/addressof.h
 	${ampBolt.Include.Dir}/iterator/constant_iterator.h
 	${ampBolt.Include.Dir}/iterator/counting_iterator.h
-	${ampBolt.Include.Dir}/iterator/iterator_traits.h 
-  ${ampBolt.Include.Dir}/iterator/permutation_iterator.h
+	${ampBolt.Include.Dir}/iterator/iterator_traits.h
+	${ampBolt.Include.Dir}/iterator/permutation_iterator.h
+	${ampBolt.Include.Dir}/iterator/transform_iterator.h
    )
     
 set( ampBolt.Runtime.Headers.Detail
@@ -88,6 +96,12 @@ set( ampBolt.Runtime.Headers.Detail
 	${ampBolt.Include.Dir}/detail/transform.inl
 	${ampBolt.Include.Dir}/detail/transform_reduce.inl
 	${ampBolt.Include.Dir}/detail/transform_scan.inl
+	${ampBolt.Include.Dir}/detail/replace.inl
+	${ampBolt.Include.Dir}/detail/remove.inl
+	${ampBolt.Include.Dir}/detail/for_each.inl
+	${ampBolt.Include.Dir}/detail/unique.inl
+	${ampBolt.Include.Dir}/detail/logical.inl
+	${ampBolt.Include.Dir}/detail/find.inl
    )
 
 

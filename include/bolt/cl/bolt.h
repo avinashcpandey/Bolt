@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 - 2013 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -86,6 +86,7 @@ namespace bolt {
         extern const std::string stablesort_by_key_kernels;
         extern const std::string sort_uint_kernels;
         extern const std::string sort_int_kernels;
+        extern const std::string sort_float_kernels;
         extern const std::string sort_common_kernels;
         extern const std::string sort_by_key_kernels;
         extern const std::string sort_by_key_int_kernels;

@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 - 2013 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 namespace bolt {
 namespace amp {
+
 
     template< typename iterator >
     struct iterator_traits
@@ -58,11 +59,14 @@ namespace amp {
         typedef const T* pointer;
         typedef const T& reference;
     };
-
-    struct fancy_iterator_tag : public std::random_access_iterator_tag
+	
+    struct fancy_iterator_tag: public std::random_access_iterator_tag
     {
+        
     };
 
+	
+	
 }
 };
 

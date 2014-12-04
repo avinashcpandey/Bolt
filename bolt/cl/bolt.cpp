@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 - 2013 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -48,6 +48,7 @@
 #include "bolt/sort_kernels.hpp"
 #include "bolt/sort_uint_kernels.hpp"
 #include "bolt/sort_int_kernels.hpp"
+#include "bolt/sort_float_kernels.hpp"
 #include "bolt/sort_common_kernels.hpp"
 #include "bolt/sort_by_key_kernels.hpp"
 #include "bolt/sort_by_key_int_kernels.hpp"

@@ -1,5 +1,5 @@
 /***************************************************************************
-*   Copyright 2012 - 2013 Advanced Micro Devices, Inc.
+*   © 2012,2014 Advanced Micro Devices, Inc. All rights reserved.
 *
 *   Licensed under the Apache License, Version 2.0 (the "License");
 *   you may not use this file except in compliance with the License.
@@ -389,6 +389,7 @@ void executeFunctionType(
     {
     case f_merge:
         { 
+          
             std::cout <<  functionNames[f_merge] << std::endl;
 #if (BOLT_BENCHMARK == 1)
             bolt::BENCH_BEND::sort( ctrl, input1.begin( ), input1.end( ), binaryPredLt);
@@ -1252,7 +1253,7 @@ void PrintHelp()
     cout<<"OpenCL command line options: \n";
     cout<<"-h [ --help ]"<<"\n\t\t\t\tproduces this help message\n";
 #if (BOLT_BENCHMARK == 1)
-	cout<<"-v [ --version ]"<<"\n\t\t\t\tPrint queryable version information from the Bolt CL library\n";
+cout<<"-v [ --version ]"<<"\n\t\t\t\tPrint queryable version information from the Bolt CL library\n";
     cout<<"-q [ --queryOpenCL ]"<<"\n\t\t\t\tPrint queryable platform and device info and return\n";
     cout<<"-g [ --gpu ]"<<"\n\t\t\t\tReport only OpenCL GPU devices\n";
     cout<<"-c [ --cpu ]"<<"\n\t\t\t\tReport only OpenCL CPU devices\n";
